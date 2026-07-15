@@ -9,10 +9,12 @@ import '../providers/domain_provider.dart';
 import '../providers/preset_provider.dart';
 import '../providers/recipe_provider.dart';
 import '../providers/settings_provider.dart';
+import '../utils/app_info.dart';
 import '../utils/currencies.dart';
 import '../utils/domains.dart';
 import '../utils/units.dart';
 import '../widgets/domain_icon.dart';
+import '../widgets/ratiofy_wordmark.dart';
 import '../widgets/unit_dropdown_field.dart';
 
 class SettingsScreen extends StatelessWidget {
@@ -485,6 +487,60 @@ class SettingsScreen extends StatelessWidget {
                   onTap: () => _showImportDialog(context),
                 ),
               ],
+            ),
+          ),
+          const SizedBox(height: 24),
+          Text(
+            'About',
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Card(
+            margin: EdgeInsets.zero,
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.baseline,
+                    textBaseline: TextBaseline.alphabetic,
+                    children: [
+                      const RatiofyWordmark(fontSize: 26),
+                      const SizedBox(width: 8),
+                      Text(
+                        'v${AppInfo.version}',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(AppInfo.tagline,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        fontStyle: FontStyle.italic,
+                        color: theme.colorScheme.onSurfaceVariant,
+                      )),
+                  const SizedBox(height: 12),
+                  Text(AppInfo.description, style: theme.textTheme.bodyMedium),
+                  const SizedBox(height: 12),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton.icon(
+                      onPressed: () => showLicensePage(
+                        context: context,
+                        applicationName: AppInfo.name,
+                        applicationVersion: AppInfo.version,
+                      ),
+                      icon: const Icon(Icons.description_outlined, size: 18),
+                      label: const Text('Open-source licenses'),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ],

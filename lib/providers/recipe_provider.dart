@@ -521,6 +521,20 @@ class RecipeProvider extends ChangeNotifier {
     }
   }
 
+  /// Clears the results of the most recent calculation (each ingredient's
+  /// newQuantity/newCost) without touching quantity, cost, or checked
+  /// state — backs the "Clear results" action on the Calculated summary.
+  void clearCalculation(String recipeId) {
+    final recipe = getRecipe(recipeId);
+    if (recipe == null) return;
+    for (final ingredient in recipe.ingredients) {
+      ingredient.newQuantity = null;
+      ingredient.newCost = null;
+    }
+    notifyListeners();
+    _persist();
+  }
+
   // ---------------------------------------------------------------------
   // Backup / restore
   // ---------------------------------------------------------------------

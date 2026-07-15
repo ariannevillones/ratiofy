@@ -6,6 +6,7 @@ import '../models/preset.dart';
 import '../providers/domain_provider.dart';
 import '../providers/preset_provider.dart';
 import '../providers/settings_provider.dart';
+import '../utils/domains.dart';
 import '../utils/units.dart';
 import '../widgets/domain_icon.dart';
 import '../widgets/unit_dropdown_field.dart';
@@ -43,6 +44,7 @@ class _PresetsScreenState extends State<PresetsScreen> {
   bool _isSearching = false;
   String _searchQuery = '';
   final TextEditingController _searchController = TextEditingController();
+  String _domainFilter = _allDomainsSentinel;
 
   @override
   void dispose() {
@@ -186,49 +188,76 @@ class _PresetsScreenState extends State<PresetsScreen> {
             ),
         ],
       ),
-      body: Consumer<PresetProvider>(
-        builder: (context, provider, _) {
+      body: Consumer2<PresetProvider, DomainProvider>(
+        builder: (context, provider, domainProvider, _) {
           final groups = provider.groups;
           final query = _searchQuery.trim().toLowerCase();
 
-          final visibleGroups = query.isEmpty
+          // Domains that have at least one group explicitly scoped to
+          // them — feeds the filter chip row, mirroring the Recipes tab.
+          final domainsInUse = [
+            for (final d in domainProvider.allDomains)
+              if (groups.any((g) => g.domainId == d.id)) d,
+          ];
+
+          final domainFiltered = _domainFilter == _allDomainsSentinel
               ? groups
-              : groups.where((g) {
+              : groups
+                  .where((g) =>
+                      g.domainId == null || g.domainId == _domainFilter)
+                  .toList();
+
+          final visibleGroups = query.isEmpty
+              ? domainFiltered
+              : domainFiltered.where((g) {
                   final isUngrouped = g.id == PresetProvider.ungroupedGroupId;
                   return _groupLabelMatches(g, query, isUngrouped) ||
                       _matchingIngredients(g, query).isNotEmpty;
                 }).toList();
 
-          if (visibleGroups.isEmpty) {
-            return Center(
-              child: Padding(
-                padding: const EdgeInsets.all(32),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.search_off,
-                        size: 56, color: Theme.of(context).colorScheme.outline),
-                    const SizedBox(height: 12),
-                    Text('No ingredients match "$query"',
-                        style: Theme.of(context).textTheme.titleMedium,
-                        textAlign: TextAlign.center),
-                  ],
+          return Column(
+            children: [
+              if (domainsInUse.length > 1 && !_isSearching)
+                _DomainFilterBar(
+                  domains: domainsInUse,
+                  selected: _domainFilter,
+                  onSelected: (id) => setState(() => _domainFilter = id),
                 ),
+              Expanded(
+                child: visibleGroups.isEmpty
+                    ? Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(32),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.search_off,
+                                  size: 56,
+                                  color: Theme.of(context).colorScheme.outline),
+                              const SizedBox(height: 12),
+                              Text('No ingredients match "$query"',
+                                  style:
+                                      Theme.of(context).textTheme.titleMedium,
+                                  textAlign: TextAlign.center),
+                            ],
+                          ),
+                        ),
+                      )
+                    : ListView.builder(
+                        padding: const EdgeInsets.fromLTRB(12, 12, 12, 96),
+                        itemCount: visibleGroups.length,
+                        itemBuilder: (context, index) => _PresetGroupCard(
+                          group: visibleGroups[index],
+                          searchQuery: query,
+                        ),
+                      ),
               ),
-            );
-          }
-
-          return ListView.builder(
-            padding: const EdgeInsets.fromLTRB(12, 12, 12, 96),
-            itemCount: visibleGroups.length,
-            itemBuilder: (context, index) => _PresetGroupCard(
-              group: visibleGroups[index],
-              searchQuery: query,
-            ),
+            ],
           );
         },
       ),
       floatingActionButton: FloatingActionButton.extended(
+        heroTag: 'presets_new_group_fab',
         onPressed: () => _showAddGroupDialog(context),
         icon: const Icon(Icons.add),
         label: const Text('New Group'),
@@ -732,6 +761,52 @@ class _PresetGroupCardState extends State<_PresetGroupCard> {
                       ? 'Add ingredient'
                       : 'Add ingredient to group'),
                 ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Horizontal row of filter chips — "All" plus one per domain that has at
+/// least one group scoped to it — letting the user narrow the group list
+/// to a single domain. Mirrors the Recipes tab's domain filter bar.
+class _DomainFilterBar extends StatelessWidget {
+  final List<DomainDef> domains;
+  final String selected;
+  final ValueChanged<String> onSelected;
+
+  const _DomainFilterBar({
+    required this.domains,
+    required this.selected,
+    required this.onSelected,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 48,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: ChoiceChip(
+              label: const Text('All'),
+              selected: selected == _allDomainsSentinel,
+              onSelected: (_) => onSelected(_allDomainsSentinel),
+            ),
+          ),
+          for (final domain in domains)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              child: ChoiceChip(
+                avatar: DomainIconBadge(domain: domain, size: 18),
+                label: Text(domain.name),
+                selected: selected == domain.id,
+                onSelected: (_) => onSelected(domain.id),
               ),
             ),
         ],

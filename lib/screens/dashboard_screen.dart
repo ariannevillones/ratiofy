@@ -4,8 +4,10 @@ import 'package:provider/provider.dart';
 import '../models/recipe.dart';
 import '../providers/domain_provider.dart';
 import '../providers/recipe_provider.dart';
+import '../utils/app_info.dart';
 import '../utils/domains.dart';
 import '../widgets/domain_icon.dart';
+import '../widgets/ratiofy_wordmark.dart';
 import '../widgets/recipe_card.dart';
 import 'recipe_detail_screen.dart';
 
@@ -241,6 +243,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        toolbarHeight: _isSearching ? kToolbarHeight : kToolbarHeight + 14,
         title: _isSearching
             ? TextField(
                 controller: _searchController,
@@ -252,7 +255,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 style: Theme.of(context).textTheme.titleMedium,
                 onChanged: (value) => setState(() => _searchQuery = value),
               )
-            : const Text('Ratiofy'),
+            : Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const RatiofyWordmark(fontSize: 22),
+                  Text(
+                    AppInfo.tagline,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(context)
+                              .colorScheme
+                              .onSurfaceVariant,
+                        ),
+                  ),
+                ],
+              ),
         actions: [
           if (_isSearching)
             IconButton(
@@ -394,6 +411,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
         },
       ),
       floatingActionButton: FloatingActionButton.extended(
+        // Distinct per screen so Flutter doesn't try to Hero-morph this FAB
+        // into another screen's FAB across a route transition (they'd
+        // otherwise share the same default tag and crash on push).
+        heroTag: 'dashboard_add_recipe_fab',
         onPressed: () => _showAddRecipeDialog(context),
         icon: const Icon(Icons.add),
         label: const Text('Add Recipe'),

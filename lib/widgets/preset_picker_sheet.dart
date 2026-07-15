@@ -22,10 +22,27 @@ class PresetPickerSheet extends StatefulWidget {
 
 class _PresetPickerSheetState extends State<PresetPickerSheet> {
   final Set<String> _selectedIds = {};
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
   String _formatQuantity(double value) {
     if (value == value.roundToDouble()) return value.toInt().toString();
     return value.toString();
+  }
+
+  /// Ingredients within [group] whose name matches [query]. Empty query
+  /// matches everything.
+  List<PresetIngredient> _matchingIngredients(PresetGroup group, String query) {
+    if (query.isEmpty) return group.ingredients;
+    return group.ingredients
+        .where((i) => i.name.toLowerCase().contains(query))
+        .toList();
   }
 
   void _addSelected(BuildContext context, List<PresetGroup> groups) {
@@ -63,7 +80,8 @@ class _PresetPickerSheetState extends State<PresetPickerSheet> {
     } else if (hitLimit) {
       messenger.showSnackBar(
         const SnackBar(
-            content: Text('This recipe already has the maximum of 30 ingredients.')),
+            content:
+                Text('This recipe already has the maximum of 30 ingredients.')),
       );
     }
   }
@@ -91,6 +109,14 @@ class _PresetPickerSheetState extends State<PresetPickerSheet> {
       });
     final theme = Theme.of(context);
 
+    final query = _searchQuery.trim().toLowerCase();
+    final visibleGroups = query.isEmpty
+        ? groups
+        : groups.where((g) {
+            final labelMatches = g.label.toLowerCase().contains(query);
+            return labelMatches || _matchingIngredients(g, query).isNotEmpty;
+          }).toList();
+
     return DraggableScrollableSheet(
       expand: false,
       initialChildSize: 0.7,
@@ -113,7 +139,7 @@ class _PresetPickerSheetState extends State<PresetPickerSheet> {
               child: Row(
                 children: [
                   Expanded(
-                    child: Text('Add from Preset',
+                    child: Text('Add from Presaved Ingredients',
                         style: theme.textTheme.titleMedium
                             ?.copyWith(fontWeight: FontWeight.w600)),
                   ),
@@ -131,6 +157,28 @@ class _PresetPickerSheetState extends State<PresetPickerSheet> {
                 ],
               ),
             ),
+            if (groups.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 10),
+                child: TextField(
+                  controller: _searchController,
+                  decoration: InputDecoration(
+                    hintText: 'Search ingredients…',
+                    prefixIcon: const Icon(Icons.search, size: 20),
+                    suffixIcon: query.isEmpty
+                        ? null
+                        : IconButton(
+                            tooltip: 'Clear search',
+                            icon: const Icon(Icons.close, size: 18),
+                            onPressed: () {
+                              _searchController.clear();
+                              setState(() => _searchQuery = '');
+                            },
+                          ),
+                  ),
+                  onChanged: (value) => setState(() => _searchQuery = value),
+                ),
+              ),
             Expanded(
               child: groups.isEmpty
                   ? Center(
@@ -140,8 +188,7 @@ class _PresetPickerSheetState extends State<PresetPickerSheet> {
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Icon(Icons.inventory_2_outlined,
-                                size: 48,
-                                color: theme.colorScheme.outline),
+                                size: 48, color: theme.colorScheme.outline),
                             const SizedBox(height: 12),
                             Text(
                               'No presets configured yet.',
@@ -158,65 +205,97 @@ class _PresetPickerSheetState extends State<PresetPickerSheet> {
                         ),
                       ),
                     )
-                  : ListView(
-                      controller: scrollController,
-                      padding: const EdgeInsets.only(bottom: 8),
-                      children: [
-                        for (final group in groups)
-                          ExpansionTile(
-                            initiallyExpanded: true,
-                            leading: group.domainId != null
-                                ? DomainIconBadge(
-                                    domain:
-                                        domainProvider.resolve(group.domainId!),
-                                    size: 26,
-                                  )
-                                : null,
-                            title: Text(group.label,
-                                style: theme.textTheme.titleSmall
-                                    ?.copyWith(fontWeight: FontWeight.w600)),
-                            trailing: group.ingredients.isEmpty
-                                ? null
-                                : _GroupSelectAllCheckbox(
-                                    allSelected: group.ingredients.every(
-                                        (i) => _selectedIds.contains(i.id)),
-                                    onChanged: (selectAll) {
-                                      setState(() {
-                                        if (selectAll) {
-                                          _selectedIds.addAll(
-                                              group.ingredients.map((i) => i.id));
-                                        } else {
-                                          _selectedIds.removeAll(
-                                              group.ingredients.map((i) => i.id));
-                                        }
-                                      });
-                                    },
-                                  ),
-                            children: [
-                              for (final ingredient in group.ingredients)
-                                CheckboxListTile(
-                                  value: _selectedIds.contains(ingredient.id),
-                                  title: Text(ingredient.name),
-                                  subtitle: Text(
-                                    '${_formatQuantity(ingredient.quantity)} ${ingredient.unit}'
-                                    '${ingredient.cost != null ? ', $currencySymbol${ingredient.cost!.toStringAsFixed(2)}' : ''}',
-                                  ),
-                                  controlAffinity:
-                                      ListTileControlAffinity.leading,
-                                  onChanged: (checked) {
-                                    setState(() {
-                                      if (checked == true) {
-                                        _selectedIds.add(ingredient.id);
-                                      } else {
-                                        _selectedIds.remove(ingredient.id);
-                                      }
-                                    });
-                                  },
+                  : visibleGroups.isEmpty
+                      ? Center(
+                          child: Padding(
+                            padding: const EdgeInsets.all(32),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.search_off,
+                                    size: 48, color: theme.colorScheme.outline),
+                                const SizedBox(height: 12),
+                                Text(
+                                  'No ingredients match "$query"',
+                                  style: theme.textTheme.titleSmall,
+                                  textAlign: TextAlign.center,
                                 ),
-                            ],
+                              ],
+                            ),
                           ),
-                      ],
-                    ),
+                        )
+                      : ListView(
+                          controller: scrollController,
+                          padding: const EdgeInsets.only(bottom: 8),
+                          children: [
+                            for (final group in visibleGroups)
+                              Builder(builder: (context) {
+                                final groupLabelMatches =
+                                    group.label.toLowerCase().contains(query);
+                                final displayIngredients = groupLabelMatches
+                                    ? group.ingredients
+                                    : _matchingIngredients(group, query);
+                                return ExpansionTile(
+                                  initiallyExpanded: true,
+                                  leading: group.domainId != null
+                                      ? DomainIconBadge(
+                                          domain: domainProvider
+                                              .resolve(group.domainId!),
+                                          size: 26,
+                                        )
+                                      : null,
+                                  title: Text(group.label,
+                                      style: theme.textTheme.titleSmall
+                                          ?.copyWith(
+                                              fontWeight: FontWeight.w600)),
+                                  trailing: displayIngredients.isEmpty
+                                      ? null
+                                      : _GroupSelectAllCheckbox(
+                                          allSelected: displayIngredients.every(
+                                              (i) =>
+                                                  _selectedIds.contains(i.id)),
+                                          onChanged: (selectAll) {
+                                            setState(() {
+                                              if (selectAll) {
+                                                _selectedIds.addAll(
+                                                    displayIngredients
+                                                        .map((i) => i.id));
+                                              } else {
+                                                _selectedIds.removeAll(
+                                                    displayIngredients
+                                                        .map((i) => i.id));
+                                              }
+                                            });
+                                          },
+                                        ),
+                                  children: [
+                                    for (final ingredient in displayIngredients)
+                                      CheckboxListTile(
+                                        value: _selectedIds
+                                            .contains(ingredient.id),
+                                        title: Text(ingredient.name),
+                                        subtitle: Text(
+                                          '${_formatQuantity(ingredient.quantity)} ${ingredient.unit}'
+                                          '${ingredient.cost != null ? ', $currencySymbol${ingredient.cost!.toStringAsFixed(2)}' : ''}',
+                                        ),
+                                        controlAffinity:
+                                            ListTileControlAffinity.leading,
+                                        onChanged: (checked) {
+                                          setState(() {
+                                            if (checked == true) {
+                                              _selectedIds.add(ingredient.id);
+                                            } else {
+                                              _selectedIds
+                                                  .remove(ingredient.id);
+                                            }
+                                          });
+                                        },
+                                      ),
+                                  ],
+                                );
+                              }),
+                          ],
+                        ),
             ),
             if (groups.isNotEmpty)
               SafeArea(

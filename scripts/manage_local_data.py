@@ -126,6 +126,29 @@ def add_preset_group(
     print(f"Added group '{label}' (id: {group_id}), scoped to {scope}.")
 
 
+def rename_preset_group(
+    old_label: str, new_label: str, path: Path = PLIST_PATH
+) -> None:
+    """Renames a preset group by its current label — the same effect as
+    "Rename group" in the Ingredients tab. No-op-safe: errors out (rather
+    than silently doing nothing) if no group matches `old_label`."""
+    data = load_plist(path)
+    groups_key = "flutter.presets.groups.v1"
+    groups = json.loads(data[groups_key])
+
+    group = next((g for g in groups if g["label"] == old_label), None)
+    if group is None:
+        available = ", ".join(g["label"] for g in groups) or "(none)"
+        raise SystemExit(
+            f"No group named '{old_label}'. Available groups: {available}"
+        )
+
+    group["label"] = new_label
+    data[groups_key] = json.dumps(groups)
+    save_plist(data, path)
+    print(f"Renamed '{old_label}' -> '{new_label}'")
+
+
 def add_preset_ingredient(
     group_label: str,
     name: str,
@@ -237,6 +260,12 @@ if __name__ == "__main__":
         "(omit for all domains)",
     )
 
+    rename_group_parser = subparsers.add_parser(
+        "rename-group", help="Rename a preset group by its current label"
+    )
+    rename_group_parser.add_argument("old_label", help='e.g. "Filipino Savory Staples"')
+    rename_group_parser.add_argument("new_label", help='e.g. "Savory Staples"')
+
     add_parser = subparsers.add_parser(
         "add-ingredient", help="Add a preset ingredient to an existing group"
     )
@@ -268,6 +297,8 @@ if __name__ == "__main__":
         fix_preset_units(args.old_unit, args.new_unit)
     elif args.command == "add-group":
         add_preset_group(args.label, args.domain)
+    elif args.command == "rename-group":
+        rename_preset_group(args.old_label, args.new_label)
     elif args.command == "add-ingredient":
         add_preset_ingredient(
             args.group_label, args.name, args.unit, args.quantity, args.cost

@@ -72,9 +72,12 @@ class PresetProvider extends ChangeNotifier {
     final hasNamedGroups = _groups.any((g) => g.id != ungroupedGroupId);
     if (!hasSeeded && !hasNamedGroups) {
       _groups.addAll([
-        _buildFilipinoStaplesSeed(),
+        _buildSavoryStaplesSeed(),
         _buildBakingStaplesSeed(),
         _buildMeatsSeed(),
+        _buildVegetablesSeed(),
+        _buildSeafoodSeed(),
+        _buildSpicesSeed(),
         _buildHouseholdChemistrySeed(),
         _buildSkincareSeed(),
       ]);
@@ -116,16 +119,68 @@ class PresetProvider extends ChangeNotifier {
     );
   }
 
-  PresetGroup _buildFilipinoStaplesSeed() {
-    final group = _seedGroup('Filipino Savory Staples', domainId: 'food');
+  PresetGroup _buildSavoryStaplesSeed() {
+    final group = _seedGroup('Savory Staples', domainId: 'food');
     group.ingredients.addAll([
-      _seedIngredient('Onions'),
-      _seedIngredient('Garlic'),
-      _seedIngredient('Salt'),
-      _seedIngredient('Soy sauce'),
-      _seedIngredient('Vinegar'),
-      _seedIngredient('Tomatoes'),
-      _seedIngredient('Fish sauce'),
+      _seedIngredient('Onions', quantity: 2, unit: 'piece'),
+      _seedIngredient('Garlic', quantity: 5, unit: 'piece'),
+      _seedIngredient('Salt', quantity: 1, unit: 'tsp'),
+      _seedIngredient('Soy sauce', quantity: 3, unit: 'tbsp'),
+      _seedIngredient('Vinegar', quantity: 3, unit: 'tbsp'),
+      _seedIngredient('Tomatoes', quantity: 2, unit: 'piece'),
+      _seedIngredient('Fish sauce', quantity: 1, unit: 'tbsp'),
+    ]);
+    return group;
+  }
+
+  /// Common vegetables — a general-purpose grocery-list style starter set
+  /// for the Food domain.
+  PresetGroup _buildVegetablesSeed() {
+    final group = _seedGroup('Vegetables', domainId: 'food');
+    group.ingredients.addAll([
+      _seedIngredient('Potatoes', quantity: 3, unit: 'piece'),
+      _seedIngredient('Carrots', quantity: 2, unit: 'piece'),
+      _seedIngredient('Onions', quantity: 1, unit: 'piece'),
+      _seedIngredient('Garlic', quantity: 3, unit: 'piece'),
+      _seedIngredient('Tomatoes', quantity: 2, unit: 'piece'),
+      _seedIngredient('Bell pepper', quantity: 1, unit: 'piece'),
+      _seedIngredient('Cabbage', quantity: 1, unit: 'piece'),
+      _seedIngredient('Broccoli', quantity: 1, unit: 'piece'),
+      _seedIngredient('Spinach', quantity: 100, unit: 'g'),
+      _seedIngredient('Cucumber', quantity: 1, unit: 'piece'),
+    ]);
+    return group;
+  }
+
+  /// Common seafood — a general-purpose starter set for the Food domain.
+  PresetGroup _buildSeafoodSeed() {
+    final group = _seedGroup('Seafood', domainId: 'food');
+    group.ingredients.addAll([
+      _seedIngredient('Shrimp', quantity: 300, unit: 'g'),
+      _seedIngredient('Fish fillet', quantity: 300, unit: 'g'),
+      _seedIngredient('Salmon', quantity: 300, unit: 'g'),
+      _seedIngredient('Tuna', quantity: 200, unit: 'g'),
+      _seedIngredient('Squid', quantity: 250, unit: 'g'),
+      _seedIngredient('Crab', quantity: 2, unit: 'piece'),
+      _seedIngredient('Mussels', quantity: 500, unit: 'g'),
+      _seedIngredient('Clams', quantity: 500, unit: 'g'),
+    ]);
+    return group;
+  }
+
+  /// Common spices — a general-purpose starter set for the Food domain.
+  PresetGroup _buildSpicesSeed() {
+    final group = _seedGroup('Spices', domainId: 'food');
+    group.ingredients.addAll([
+      _seedIngredient('Black pepper', quantity: 1, unit: 'tsp'),
+      _seedIngredient('Paprika', quantity: 1, unit: 'tsp'),
+      _seedIngredient('Cumin', quantity: 1, unit: 'tsp'),
+      _seedIngredient('Turmeric', quantity: 1, unit: 'tsp'),
+      _seedIngredient('Chili powder', quantity: 1, unit: 'tsp'),
+      _seedIngredient('Cinnamon', quantity: 1, unit: 'tsp'),
+      _seedIngredient('Bay leaves', quantity: 2, unit: 'piece'),
+      _seedIngredient('Star anise', quantity: 2, unit: 'piece'),
+      _seedIngredient('Ginger', quantity: 1, unit: 'tbsp'),
     ]);
     return group;
   }

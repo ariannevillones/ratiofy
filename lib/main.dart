@@ -14,21 +14,19 @@ void main() {
 class RatiofyApp extends StatelessWidget {
   const RatiofyApp({super.key});
 
-  static const _seedColor = Color(0xFFE1662F); // warm, food-friendly orange
+  static const _seedColor = Color.fromARGB(255, 208, 3, 212); // blue
 
   /// Shared Material 3 theme builder for both light and dark brightness.
   ThemeData _buildTheme(Brightness brightness) {
     final colorScheme = ColorScheme.fromSeed(
-      seedColor: _seedColor,
+      seedColor: const Color.fromARGB(255, 2, 174, 231),
       brightness: brightness,
     );
 
     return ThemeData(
       useMaterial3: true,
       colorScheme: colorScheme,
-      scaffoldBackgroundColor: brightness == Brightness.light
-          ? const Color(0xFFFAF7F2)
-          : colorScheme.surface,
+      scaffoldBackgroundColor: colorScheme.surface,
       appBarTheme: const AppBarTheme(
         centerTitle: false,
         elevation: 0,

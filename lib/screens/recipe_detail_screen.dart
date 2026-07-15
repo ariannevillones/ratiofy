@@ -127,7 +127,7 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen>
             ),
             ListTile(
               leading: const Icon(Icons.inventory_2_outlined),
-              title: const Text('From preset'),
+              title: const Text('From Presaved ingredients'),
               subtitle: const Text('Pick from your saved ingredient groups'),
               onTap: () {
                 Navigator.of(sheetContext).pop();
@@ -577,6 +577,7 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen>
           ),
           floatingActionButton: _tabIndex == 0
               ? FloatingActionButton.extended(
+                  heroTag: 'recipe_detail_add_ingredient_fab',
                   onPressed: recipe.isFull
                       ? null
                       : () => _showAddIngredientOptions(context),
@@ -591,9 +592,14 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen>
     );
   }
 
+  /// The whole tab is one scrollable list — the Calculate bar (and its
+  /// calculated-summary text, which can grow tall) scrolls together with
+  /// the ingredient cards below it, rather than being a fixed header with
+  /// only the ingredient list scrolling independently underneath.
   Widget _buildIngredientsTab(BuildContext context, Recipe recipe,
       DomainDef domain, RecipeProvider provider) {
-    return Column(
+    return ListView(
+      padding: const EdgeInsets.only(top: 8, bottom: 96),
       children: [
         if (recipe.yieldQuantity != null)
           _YieldBanner(
@@ -608,59 +614,52 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen>
           onCalculate: () => _handleCalculate(context, recipe),
         ),
         const Divider(height: 1),
-        if (recipe.ingredients.isNotEmpty)
-          _SelectAllForCalculationBar(recipe: recipe),
-        Expanded(
-          child: recipe.ingredients.isEmpty
-              ? Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(32),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.egg_alt_outlined,
-                            size: 56,
-                            color: Theme.of(context).colorScheme.outline),
-                        const SizedBox(height: 12),
-                        Text(
-                          'No ingredients yet',
-                          style: Theme.of(context).textTheme.titleMedium,
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          'Tap the + button to add an ingredient.',
-                          textAlign: TextAlign.center,
-                          style: Theme.of(context)
-                              .textTheme
-                              .bodyMedium
-                              ?.copyWith(
-                                color: Theme.of(context)
-                                    .colorScheme
-                                    .onSurfaceVariant,
-                              ),
-                        ),
-                      ],
-                    ),
+        if (recipe.ingredients.isNotEmpty) ...[
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+            child: Text(
+              'Ingredients (${recipe.ingredients.length})',
+              style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
-                )
-              : ListView.builder(
-                  padding: const EdgeInsets.only(top: 8, bottom: 96),
-                  itemCount: recipe.ingredients.length,
-                  itemBuilder: (context, index) {
-                    final ingredient = recipe.ingredients[index];
-                    return IngredientCard(
-                      key: ValueKey(ingredient.id),
-                      recipeId: recipe.id,
-                      ingredient: ingredient,
-                      costVisible: domain.costVisible,
-                      extraFieldLabel: domain.extraFieldLabel,
-                      referenceQuantity: _referenceQuantity(recipe),
-                      onDelete: () =>
-                          _deleteIngredientWithUndo(context, recipe, index),
-                    );
-                  },
+            ),
+          ),
+          _SelectAllForCalculationBar(recipe: recipe),
+        ],
+        if (recipe.ingredients.isEmpty)
+          Padding(
+            padding: const EdgeInsets.all(32),
+            child: Column(
+              children: [
+                Icon(Icons.egg_alt_outlined,
+                    size: 56, color: Theme.of(context).colorScheme.outline),
+                const SizedBox(height: 12),
+                Text(
+                  'No ingredients yet',
+                  style: Theme.of(context).textTheme.titleMedium,
                 ),
-        ),
+                const SizedBox(height: 6),
+                Text(
+                  'Tap the + button to add an ingredient.',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                ),
+              ],
+            ),
+          )
+        else
+          for (var i = 0; i < recipe.ingredients.length; i++)
+            IngredientCard(
+              key: ValueKey(recipe.ingredients[i].id),
+              recipeId: recipe.id,
+              ingredient: recipe.ingredients[i],
+              costVisible: domain.costVisible,
+              extraFieldLabel: domain.extraFieldLabel,
+              referenceQuantity: _referenceQuantity(recipe),
+              onDelete: () => _deleteIngredientWithUndo(context, recipe, i),
+            ),
       ],
     );
   }
@@ -682,18 +681,21 @@ class _NotesTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        PhotoSection(recipe: recipe),
-        const Divider(height: 1),
-        Expanded(
-          child: Padding(
+    // The whole tab scrolls as one unit — photos and notes together —
+    // rather than the notes field being the only scrollable region within
+    // a fixed-height remainder below the photos.
+    return SingleChildScrollView(
+      padding: const EdgeInsets.only(bottom: 96),
+      child: Column(
+        children: [
+          PhotoSection(recipe: recipe),
+          const Divider(height: 1),
+          Padding(
             padding: const EdgeInsets.all(16),
             child: TextField(
               controller: controller,
-              expands: true,
               maxLines: null,
-              minLines: null,
+              minLines: 10,
               textAlignVertical: TextAlignVertical.top,
               textCapitalization: TextCapitalization.sentences,
               decoration: const InputDecoration(
@@ -704,8 +706,8 @@ class _NotesTab extends StatelessWidget {
               onChanged: onChanged,
             ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
@@ -779,13 +781,40 @@ class _CalculateForBar extends StatelessWidget {
     required this.onCalculate,
   });
 
+  static String _formatQty(double value) {
+    if (value == value.roundToDouble()) return value.toInt().toString();
+    return value.toString();
+  }
+
+  /// One line per ingredient that's been through a calculation (i.e. has a
+  /// `newQuantity`), e.g. "Garlic - 200g, $1 → 400g, $2". Ingredients that
+  /// were unchecked during the calculation still show (their new values
+  /// just mirror the originals), so the summary covers the whole recipe.
+  String _calculatedSummary(String currencySymbol) {
+    final lines = <String>[];
+    for (final ingredient in recipe.ingredients) {
+      final newQuantity = ingredient.newQuantity;
+      if (newQuantity == null) continue;
+
+      final oldPart = '${_formatQty(ingredient.quantity)}${ingredient.unit}'
+          '${ingredient.cost != null ? ', $currencySymbol${ingredient.cost!.toStringAsFixed(2)}' : ''}';
+      final newPart = '${_formatQty(newQuantity)}${ingredient.unit}'
+          '${ingredient.newCost != null ? ', $currencySymbol${ingredient.newCost!.toStringAsFixed(2)}' : ''}';
+
+      lines.add('${ingredient.displayName} - $oldPart → $newPart');
+    }
+    return lines.join('\n');
+  }
+
   @override
   Widget build(BuildContext context) {
     final provider = context.read<RecipeProvider>();
+    final currencySymbol = context.watch<SettingsProvider>().currencySymbol;
     final theme = Theme.of(context);
     final hasIngredients = recipe.ingredients.isNotEmpty;
     final effectiveRef = recipe.effectiveCalculateForRefNumber;
     final byTotal = mode == _CalculationMode.byTotal;
+    final summary = _calculatedSummary(currencySymbol);
 
     return Container(
       width: double.infinity,
@@ -881,6 +910,66 @@ class _CalculateForBar extends StatelessWidget {
                   : 'Only checked ingredients below are scaled. "Calculate for" defaults to the first checked ingredient until you pick one manually.',
               style: theme.textTheme.bodySmall
                   ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+            ),
+          ],
+          if (summary.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.fromLTRB(12, 4, 4, 12),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.only(left: 4),
+                        child: Text(
+                          'Calculated',
+                          style: theme.textTheme.labelLarge?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      const Spacer(),
+                      IconButton(
+                        tooltip: 'Copy to clipboard',
+                        icon: const Icon(Icons.copy_outlined, size: 18),
+                        onPressed: () async {
+                          await Clipboard.setData(
+                              ClipboardData(text: summary));
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                  content: Text('Copied to clipboard.')),
+                            );
+                          }
+                        },
+                      ),
+                      IconButton(
+                        tooltip: 'Clear results',
+                        icon: const Icon(Icons.clear, size: 18),
+                        onPressed: () =>
+                            provider.clearCalculation(recipe.id),
+                      ),
+                    ],
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(0, 0, 8, 0),
+                    child: SelectableText(
+                      summary,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        fontFeatures: const [FontFeature.tabularFigures()],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ],
         ],
