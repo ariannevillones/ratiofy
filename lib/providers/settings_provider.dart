@@ -8,6 +8,7 @@ import '../utils/currencies.dart';
 class SettingsProvider extends ChangeNotifier {
   static const _currencyCodeKey = 'settings.currencyCode';
   static const _themeModeKey = 'settings.themeMode';
+  static const _hasSeenOnboardingKey = 'settings.hasSeenOnboarding';
 
   String _currencyCode = 'USD';
 
@@ -18,6 +19,9 @@ class SettingsProvider extends ChangeNotifier {
   ThemeMode _themeMode = ThemeMode.system;
   ThemeMode get themeMode => _themeMode;
 
+  bool _hasSeenOnboarding = false;
+  bool get hasSeenOnboarding => _hasSeenOnboarding;
+
   bool _isLoaded = false;
   bool get isLoaded => _isLoaded;
 
@@ -25,8 +29,16 @@ class SettingsProvider extends ChangeNotifier {
     final prefs = await SharedPreferences.getInstance();
     _currencyCode = prefs.getString(_currencyCodeKey) ?? 'USD';
     _themeMode = _themeModeFromString(prefs.getString(_themeModeKey));
+    _hasSeenOnboarding = prefs.getBool(_hasSeenOnboardingKey) ?? false;
     _isLoaded = true;
     notifyListeners();
+  }
+
+  Future<void> setHasSeenOnboarding() async {
+    _hasSeenOnboarding = true;
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_hasSeenOnboardingKey, true);
   }
 
   Future<void> setCurrencyCode(String code) async {

@@ -20,6 +20,7 @@ class Units {
     UnitGroup('Length (SI)', ['mm', 'cm', 'm']),
     UnitGroup('Length (Imperial)', ['in', 'ft']),
     UnitGroup('Temperature', ['°C', '°F']),
+    UnitGroup('Time', ['ms', 's', 'h', 'd']),
   ];
 
   /// Flat list of every selectable unit, in display order.

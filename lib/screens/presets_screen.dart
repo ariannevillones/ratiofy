@@ -7,6 +7,7 @@ import '../providers/domain_provider.dart';
 import '../providers/preset_provider.dart';
 import '../providers/settings_provider.dart';
 import '../utils/domains.dart';
+import '../utils/ui_labels.dart';
 import '../utils/units.dart';
 import '../widgets/domain_icon.dart';
 import '../widgets/unit_dropdown_field.dart';
@@ -72,7 +73,7 @@ class _PresetsScreenState extends State<PresetsScreen> {
       context: context,
       builder: (dialogContext) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
-          title: const Text('New Preset Group'),
+          title: const Text(PresetsLabels.newGroupDialogTitle),
           content: Form(
             key: formKey,
             child: Column(
@@ -84,12 +85,12 @@ class _PresetsScreenState extends State<PresetsScreen> {
                   autofocus: true,
                   textCapitalization: TextCapitalization.words,
                   decoration: const InputDecoration(
-                    labelText: 'Group label',
-                    hintText: 'e.g. Filipino Savory Staples',
+                    labelText: PresetsLabels.groupLabelLabel,
+                    hintText: PresetsLabels.groupLabelHint,
                   ),
                   validator: (value) =>
                       (value == null || value.trim().isEmpty)
-                          ? 'Please enter a label'
+                          ? PresetsLabels.pleaseEnterALabel
                           : null,
                 ),
                 const SizedBox(height: 12),
@@ -97,11 +98,11 @@ class _PresetsScreenState extends State<PresetsScreen> {
                   initialValue: selectedDomainId,
                   isExpanded: true,
                   decoration: const InputDecoration(
-                      labelText: 'Domain (optional)'),
+                      labelText: PresetsLabels.groupDomainOptionalLabel),
                   items: [
                     const DropdownMenuItem(
                       value: _allDomainsSentinel,
-                      child: Text('All domains'),
+                      child: Text(CommonLabels.allDomains),
                     ),
                     for (final domain in allDomains)
                       DropdownMenuItem(
@@ -128,7 +129,7 @@ class _PresetsScreenState extends State<PresetsScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.of(dialogContext).pop(),
-              child: const Text('Cancel'),
+              child: const Text(CommonLabels.cancel),
             ),
             FilledButton(
               onPressed: () {
@@ -139,7 +140,7 @@ class _PresetsScreenState extends State<PresetsScreen> {
                   });
                 }
               },
-              child: const Text('Create'),
+              child: const Text(CommonLabels.create),
             ),
           ],
         ),
@@ -157,6 +158,156 @@ class _PresetsScreenState extends State<PresetsScreen> {
     }
   }
 
+  /// Screen-level "Add Ingredient" dialog — includes a Group field so the
+  /// ingredient can be filed under any group right away, defaulting to
+  /// Ungrouped, instead of needing to be added from within a specific
+  /// group's card.
+  Future<void> _showAddIngredientDialog(BuildContext context) async {
+    final provider = context.read<PresetProvider>();
+    final currencySymbol = context.read<SettingsProvider>().currencySymbol;
+    final nameController = TextEditingController();
+    final quantityController = TextEditingController(text: '0');
+    final costController = TextEditingController();
+    String unit = Units.defaultUnit;
+    String groupId = PresetProvider.ungroupedGroupId;
+    final formKey = GlobalKey<FormState>();
+
+    final result = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              title: const Text(PresetsLabels.newIngredientDialogTitle),
+              content: SingleChildScrollView(
+                child: Form(
+                  key: formKey,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      TextFormField(
+                        controller: nameController,
+                        autofocus: true,
+                        textCapitalization: TextCapitalization.sentences,
+                        decoration: const InputDecoration(
+                          labelText: PresetsLabels.ingredientNameLabel,
+                          hintText: PresetsLabels.ingredientNameHint,
+                        ),
+                        validator: (value) =>
+                            (value == null || value.trim().isEmpty)
+                                ? CommonLabels.pleaseEnterAName
+                                : null,
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            flex: 3,
+                            child: TextFormField(
+                              controller: quantityController,
+                              keyboardType: const TextInputType
+                                  .numberWithOptions(decimal: true),
+                              inputFormatters: [
+                                FilteringTextInputFormatter.allow(
+                                    RegExp(r'^\d*\.?\d*')),
+                              ],
+                              decoration: const InputDecoration(
+                                  labelText: PresetsLabels.defaultQuantityLabel),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            flex: 2,
+                            child: UnitDropdownField(
+                              value: unit,
+                              onChanged: (value) =>
+                                  setState(() => unit = value),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: costController,
+                        keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true),
+                        inputFormatters: [
+                          FilteringTextInputFormatter.allow(
+                              RegExp(r'^\d*\.?\d*')),
+                        ],
+                        decoration: InputDecoration(
+                          labelText: PresetsLabels.defaultCostOptionalLabel,
+                          prefixText: '$currencySymbol ',
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      DropdownButtonFormField<String>(
+                        initialValue: groupId,
+                        isExpanded: true,
+                        decoration: const InputDecoration(
+                            labelText: PresetsLabels.ingredientGroupOptionalLabel),
+                        items: [
+                          for (final group in provider.groups)
+                            DropdownMenuItem(
+                              value: group.id,
+                              child: Text(
+                                  group.id == PresetProvider.ungroupedGroupId
+                                      ? PresetsLabels.ungrouped
+                                      : group.label),
+                            ),
+                        ],
+                        onChanged: (value) {
+                          if (value != null) setState(() => groupId = value);
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                  child: const Text(CommonLabels.cancel),
+                ),
+                FilledButton(
+                  onPressed: () {
+                    if (formKey.currentState!.validate()) {
+                      final qty =
+                          double.tryParse(quantityController.text) ?? 0;
+                      final costText = costController.text.trim();
+                      final cost =
+                          costText.isEmpty ? null : double.tryParse(costText);
+                      Navigator.of(dialogContext).pop({
+                        'name': nameController.text.trim(),
+                        'unit': unit,
+                        'quantity': qty,
+                        'cost': cost,
+                        'groupId': groupId,
+                      });
+                    }
+                  },
+                  child: const Text(CommonLabels.add),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (result != null && context.mounted) {
+      provider.addPresetIngredient(
+        result['groupId'] as String,
+        name: result['name'] as String,
+        unit: result['unit'] as String,
+        quantity: result['quantity'] as double,
+        cost: result['cost'] as double?,
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -166,23 +317,23 @@ class _PresetsScreenState extends State<PresetsScreen> {
                 controller: _searchController,
                 autofocus: true,
                 decoration: const InputDecoration(
-                  hintText: 'Search ingredients…',
+                  hintText: PresetsLabels.searchHint,
                   border: InputBorder.none,
                 ),
                 style: Theme.of(context).textTheme.titleMedium,
                 onChanged: (value) => setState(() => _searchQuery = value),
               )
-            : const Text('Ingredients'),
+            : const Text(PresetsLabels.appBarTitle),
         actions: [
           if (_isSearching)
             IconButton(
-              tooltip: 'Close search',
+              tooltip: PresetsLabels.closeSearchTooltip,
               icon: const Icon(Icons.close),
               onPressed: _stopSearch,
             )
           else
             IconButton(
-              tooltip: 'Search ingredients',
+              tooltip: PresetsLabels.searchTooltip,
               icon: const Icon(Icons.search),
               onPressed: _startSearch,
             ),
@@ -235,7 +386,7 @@ class _PresetsScreenState extends State<PresetsScreen> {
                                   size: 56,
                                   color: Theme.of(context).colorScheme.outline),
                               const SizedBox(height: 12),
-                              Text('No ingredients match "$query"',
+                              Text(PresetsLabels.noIngredientsMatch(query),
                                   style:
                                       Theme.of(context).textTheme.titleMedium,
                                   textAlign: TextAlign.center),
@@ -256,11 +407,24 @@ class _PresetsScreenState extends State<PresetsScreen> {
           );
         },
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        heroTag: 'presets_new_group_fab',
-        onPressed: () => _showAddGroupDialog(context),
-        icon: const Icon(Icons.add),
-        label: const Text('New Group'),
+      floatingActionButton: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          FloatingActionButton.extended(
+            heroTag: 'presets_new_group_fab',
+            onPressed: () => _showAddGroupDialog(context),
+            icon: const Icon(Icons.create_new_folder_outlined),
+            label: const Text(PresetsLabels.newGroupFabLabel),
+          ),
+          const SizedBox(height: 12),
+          FloatingActionButton.extended(
+            heroTag: 'presets_add_ingredient_fab',
+            onPressed: () => _showAddIngredientDialog(context),
+            icon: const Icon(Icons.add),
+            label: const Text(PresetsLabels.addIngredientFabLabel),
+          ),
+        ],
       ),
     );
   }
@@ -299,23 +463,24 @@ class _PresetGroupCardState extends State<_PresetGroupCard> {
     final newLabel = await showDialog<String>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Rename Group'),
+        title: const Text(PresetsLabels.renameGroupDialogTitle),
         content: Form(
           key: formKey,
           child: TextFormField(
             controller: controller,
             autofocus: true,
             textCapitalization: TextCapitalization.words,
-            decoration: const InputDecoration(labelText: 'Group label'),
+            decoration:
+                const InputDecoration(labelText: PresetsLabels.groupLabelLabel),
             validator: (value) => (value == null || value.trim().isEmpty)
-                ? 'Please enter a label'
+                ? PresetsLabels.pleaseEnterALabel
                 : null,
           ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(),
-            child: const Text('Cancel'),
+            child: const Text(CommonLabels.cancel),
           ),
           FilledButton(
             onPressed: () {
@@ -323,7 +488,7 @@ class _PresetGroupCardState extends State<_PresetGroupCard> {
                 Navigator.of(dialogContext).pop(controller.text.trim());
               }
             },
-            child: const Text('Save'),
+            child: const Text(CommonLabels.save),
           ),
         ],
       ),
@@ -343,17 +508,18 @@ class _PresetGroupCardState extends State<_PresetGroupCard> {
       context: context,
       builder: (dialogContext) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
-          title: const Text('Group Domain'),
+          title: const Text(PresetsLabels.groupDomainDialogTitle),
           content: SizedBox(
             width: 360,
             child: DropdownButtonFormField<String>(
               initialValue: selectedDomainId,
               isExpanded: true,
-              decoration: const InputDecoration(labelText: 'Domain'),
+              decoration:
+                  const InputDecoration(labelText: CommonLabels.domain),
               items: [
                 const DropdownMenuItem(
                   value: _allDomainsSentinel,
-                  child: Text('All domains'),
+                  child: Text(CommonLabels.allDomains),
                 ),
                 for (final domain in allDomains)
                   DropdownMenuItem(
@@ -378,12 +544,12 @@ class _PresetGroupCardState extends State<_PresetGroupCard> {
           actions: [
             TextButton(
               onPressed: () => Navigator.of(dialogContext).pop(),
-              child: const Text('Cancel'),
+              child: const Text(CommonLabels.cancel),
             ),
             FilledButton(
               onPressed: () =>
                   Navigator.of(dialogContext).pop(selectedDomainId),
-              child: const Text('Save'),
+              child: const Text(CommonLabels.save),
             ),
           ],
         ),
@@ -400,17 +566,17 @@ class _PresetGroupCardState extends State<_PresetGroupCard> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Delete group?'),
+        title: const Text(PresetsLabels.deleteGroupTitle),
         content: Text(
-            '"${group.label}" and its ${group.ingredients.length} preset ingredient(s) will be removed.'),
+            PresetsLabels.deleteGroupContent(group.label, group.ingredients.length)),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('Cancel'),
+            child: const Text(CommonLabels.cancel),
           ),
           FilledButton.tonal(
             onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text('Delete'),
+            child: const Text(CommonLabels.delete),
           ),
         ],
       ),
@@ -426,17 +592,17 @@ class _PresetGroupCardState extends State<_PresetGroupCard> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Delete selected ingredients?'),
-        content: Text(
-            '$count ingredient(s) will be removed from "${group.label}".'),
+        title: const Text(PresetsLabels.deleteSelectedTitle),
+        content:
+            Text(PresetsLabels.deleteSelectedContent(count, group.label)),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('Cancel'),
+            child: const Text(CommonLabels.cancel),
           ),
           FilledButton.tonal(
             onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text('Delete'),
+            child: const Text(CommonLabels.delete),
           ),
         ],
       ),
@@ -451,17 +617,15 @@ class _PresetGroupCardState extends State<_PresetGroupCard> {
     }
   }
 
-  Future<void> _showIngredientDialog(BuildContext context,
-      {PresetIngredient? existing}) async {
+  Future<void> _showEditIngredientDialog(
+      BuildContext context, PresetIngredient existing) async {
     final currencySymbol = context.read<SettingsProvider>().currencySymbol;
-    final nameController = TextEditingController(text: existing?.name ?? '');
-    final quantityController = TextEditingController(
-        text: existing != null ? _formatForEditing(existing.quantity) : '0');
+    final nameController = TextEditingController(text: existing.name);
+    final quantityController =
+        TextEditingController(text: _formatForEditing(existing.quantity));
     final costController = TextEditingController(
-        text: existing?.cost != null
-            ? _formatForEditing(existing!.cost!)
-            : '');
-    String unit = existing?.unit ?? Units.defaultUnit;
+        text: existing.cost != null ? _formatForEditing(existing.cost!) : '');
+    String unit = existing.unit;
     final formKey = GlobalKey<FormState>();
 
     final result = await showDialog<Map<String, dynamic>>(
@@ -470,9 +634,7 @@ class _PresetGroupCardState extends State<_PresetGroupCard> {
         return StatefulBuilder(
           builder: (context, setState) {
             return AlertDialog(
-              title: Text(existing == null
-                  ? 'New Preset Ingredient'
-                  : 'Edit Preset Ingredient'),
+              title: const Text(PresetsLabels.editIngredientDialogTitle),
               content: SingleChildScrollView(
                 child: Form(
                   key: formKey,
@@ -485,12 +647,12 @@ class _PresetGroupCardState extends State<_PresetGroupCard> {
                         autofocus: true,
                         textCapitalization: TextCapitalization.sentences,
                         decoration: const InputDecoration(
-                          labelText: 'Ingredient name',
-                          hintText: 'e.g. Garlic',
+                          labelText: PresetsLabels.ingredientNameLabel,
+                          hintText: PresetsLabels.ingredientNameHint,
                         ),
                         validator: (value) =>
                             (value == null || value.trim().isEmpty)
-                                ? 'Please enter a name'
+                                ? CommonLabels.pleaseEnterAName
                                 : null,
                       ),
                       const SizedBox(height: 12),
@@ -508,7 +670,7 @@ class _PresetGroupCardState extends State<_PresetGroupCard> {
                                     RegExp(r'^\d*\.?\d*')),
                               ],
                               decoration: const InputDecoration(
-                                  labelText: 'Default quantity'),
+                                  labelText: PresetsLabels.defaultQuantityLabel),
                             ),
                           ),
                           const SizedBox(width: 10),
@@ -532,7 +694,7 @@ class _PresetGroupCardState extends State<_PresetGroupCard> {
                               RegExp(r'^\d*\.?\d*')),
                         ],
                         decoration: InputDecoration(
-                          labelText: 'Default cost (optional)',
+                          labelText: PresetsLabels.defaultCostOptionalLabel,
                           prefixText: '$currencySymbol ',
                         ),
                       ),
@@ -543,7 +705,7 @@ class _PresetGroupCardState extends State<_PresetGroupCard> {
               actions: [
                 TextButton(
                   onPressed: () => Navigator.of(dialogContext).pop(),
-                  child: const Text('Cancel'),
+                  child: const Text(CommonLabels.cancel),
                 ),
                 FilledButton(
                   onPressed: () {
@@ -560,7 +722,7 @@ class _PresetGroupCardState extends State<_PresetGroupCard> {
                       });
                     }
                   },
-                  child: const Text('Save'),
+                  child: const Text(CommonLabels.save),
                 ),
               ],
             );
@@ -570,26 +732,15 @@ class _PresetGroupCardState extends State<_PresetGroupCard> {
     );
 
     if (result != null && context.mounted) {
-      final provider = context.read<PresetProvider>();
-      if (existing == null) {
-        provider.addPresetIngredient(
-          group.id,
-          name: result['name'] as String,
-          unit: result['unit'] as String,
-          quantity: result['quantity'] as double,
-          cost: result['cost'] as double?,
-        );
-      } else {
-        provider.updatePresetIngredient(
-          group.id,
-          existing.id,
-          name: result['name'] as String,
-          unit: result['unit'] as String,
-          quantity: result['quantity'] as double,
-          cost: result['cost'] as double?,
-          clearCost: result['cost'] == null,
-        );
-      }
+      context.read<PresetProvider>().updatePresetIngredient(
+            group.id,
+            existing.id,
+            name: result['name'] as String,
+            unit: result['unit'] as String,
+            quantity: result['quantity'] as double,
+            cost: result['cost'] as double?,
+            clearCost: result['cost'] == null,
+          );
     }
   }
 
@@ -627,27 +778,27 @@ class _PresetGroupCardState extends State<_PresetGroupCard> {
         leading:
             scopedDomain != null ? DomainIconBadge(domain: scopedDomain) : null,
         title: Text(
-          _isUngrouped ? 'Ungrouped' : group.label,
+          _isUngrouped ? PresetsLabels.ungrouped : group.label,
           style: theme.textTheme.titleMedium?.copyWith(
             fontWeight: FontWeight.w600,
           ),
         ),
         subtitle: Text(
-          '${_isUngrouped ? (displayIngredients.length == 1 ? '1 ingredient without a group' : '${displayIngredients.length} ingredients without a group') : (displayIngredients.length == 1 ? '1 ingredient' : '${displayIngredients.length} ingredients')}'
-          '${widget.searchQuery.isNotEmpty && !groupLabelMatches ? ' matching' : ''}'
+          '${PresetsLabels.ingredientCountSubtitle(displayIngredients.length, ungrouped: _isUngrouped)}'
+          '${widget.searchQuery.isNotEmpty && !groupLabelMatches ? PresetsLabels.matchingSuffix : ''}'
           '${scopedDomain != null ? ' · ${scopedDomain.name}' : ''}',
         ),
         trailing: _selectionMode
             ? TextButton(
                 onPressed: _exitSelectionMode,
-                child: const Text('Done'),
+                child: const Text(CommonLabels.done),
               )
             : Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   if (hasIngredients)
                     IconButton(
-                      tooltip: 'Select ingredients',
+                      tooltip: PresetsLabels.selectIngredientsTooltip,
                       icon: const Icon(Icons.checklist_outlined),
                       onPressed: () =>
                           setState(() => _selectionMode = true),
@@ -665,11 +816,14 @@ class _PresetGroupCardState extends State<_PresetGroupCard> {
                       },
                       itemBuilder: (context) => const [
                         PopupMenuItem(
-                            value: 'rename', child: Text('Rename group')),
+                            value: 'rename',
+                            child: Text(PresetsLabels.renameGroupMenuItem)),
                         PopupMenuItem(
-                            value: 'domain', child: Text('Change domain')),
+                            value: 'domain',
+                            child: Text(PresetsLabels.changeDomainMenuItem)),
                         PopupMenuItem(
-                            value: 'delete', child: Text('Delete group')),
+                            value: 'delete',
+                            child: Text(PresetsLabels.deleteGroupMenuItem)),
                       ],
                     ),
                 ],
@@ -678,7 +832,7 @@ class _PresetGroupCardState extends State<_PresetGroupCard> {
           if (_selectionMode && hasIngredients)
             CheckboxListTile(
               value: allSelected,
-              title: const Text('Select all'),
+              title: const Text(PresetsLabels.selectAll),
               controlAffinity: ListTileControlAffinity.leading,
               onChanged: (checked) {
                 setState(() {
@@ -722,13 +876,13 @@ class _PresetGroupCardState extends State<_PresetGroupCard> {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         IconButton(
-                          tooltip: 'Edit',
+                          tooltip: PresetsLabels.editTooltip,
                           icon: const Icon(Icons.edit_outlined),
-                          onPressed: () => _showIngredientDialog(context,
-                              existing: ingredient),
+                          onPressed: () =>
+                              _showEditIngredientDialog(context, ingredient),
                         ),
                         IconButton(
-                          tooltip: 'Delete',
+                          tooltip: PresetsLabels.deleteTooltip,
                           icon: const Icon(Icons.delete_outline),
                           onPressed: () => context
                               .read<PresetProvider>()
@@ -745,24 +899,21 @@ class _PresetGroupCardState extends State<_PresetGroupCard> {
                 child: FilledButton.tonalIcon(
                   onPressed: () => _confirmDeleteSelected(context),
                   icon: const Icon(Icons.delete_outline),
-                  label: Text('Delete Selected (${_selectedIds.length})'),
+                  label:
+                      Text(PresetsLabels.deleteSelectedButton(_selectedIds.length)),
                 ),
               ),
             ),
-          if (!_selectionMode)
+          if (!_selectionMode && !hasIngredients)
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: TextButton.icon(
-                  onPressed: () => _showIngredientDialog(context),
-                  icon: const Icon(Icons.add),
-                  label: Text(_isUngrouped
-                      ? 'Add ingredient'
-                      : 'Add ingredient to group'),
-                ),
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              child: Text(
+                PresetsLabels.emptyGroupHint,
+                style: theme.textTheme.bodySmall
+                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
               ),
             ),
+          if (!_selectionMode && hasIngredients) const SizedBox(height: 8),
         ],
       ),
     );
@@ -794,7 +945,7 @@ class _DomainFilterBar extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 4),
             child: ChoiceChip(
-              label: const Text('All'),
+              label: const Text(CommonLabels.all),
               selected: selected == _allDomainsSentinel,
               onSelected: (_) => onSelected(_allDomainsSentinel),
             ),

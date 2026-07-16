@@ -7,6 +7,7 @@ import '../providers/preset_provider.dart';
 import '../providers/recipe_provider.dart';
 import '../providers/settings_provider.dart';
 import '../screens/presets_screen.dart';
+import '../utils/ui_labels.dart';
 import 'domain_icon.dart';
 
 /// Bottom sheet that lets the user pick one or more preset ingredients
@@ -73,15 +74,13 @@ class _PresetPickerSheetState extends State<PresetPickerSheet> {
       messenger.showSnackBar(
         SnackBar(
           content: Text(hitLimit
-              ? 'Added $addedCount ingredient(s) — stopped at the 30-ingredient limit.'
-              : 'Added $addedCount ingredient(s).'),
+              ? PresetPickerLabels.addedCount(addedCount)
+              : PresetPickerLabels.addedCountNoLimit(addedCount)),
         ),
       );
     } else if (hitLimit) {
       messenger.showSnackBar(
-        const SnackBar(
-            content:
-                Text('This recipe already has the maximum of 30 ingredients.')),
+        const SnackBar(content: Text(PresetPickerLabels.recipeAlreadyFull)),
       );
     }
   }
@@ -139,7 +138,7 @@ class _PresetPickerSheetState extends State<PresetPickerSheet> {
               child: Row(
                 children: [
                   Expanded(
-                    child: Text('Add from Presaved Ingredients',
+                    child: Text(PresetPickerLabels.title,
                         style: theme.textTheme.titleMedium
                             ?.copyWith(fontWeight: FontWeight.w600)),
                   ),
@@ -152,7 +151,7 @@ class _PresetPickerSheetState extends State<PresetPickerSheet> {
                       );
                     },
                     icon: const Icon(Icons.settings_outlined, size: 18),
-                    label: const Text('Manage'),
+                    label: const Text(PresetPickerLabels.manage),
                   ),
                 ],
               ),
@@ -163,12 +162,12 @@ class _PresetPickerSheetState extends State<PresetPickerSheet> {
                 child: TextField(
                   controller: _searchController,
                   decoration: InputDecoration(
-                    hintText: 'Search ingredients…',
+                    hintText: PresetPickerLabels.searchHint,
                     prefixIcon: const Icon(Icons.search, size: 20),
                     suffixIcon: query.isEmpty
                         ? null
                         : IconButton(
-                            tooltip: 'Clear search',
+                            tooltip: CommonLabels.clearSearch,
                             icon: const Icon(Icons.close, size: 18),
                             onPressed: () {
                               _searchController.clear();
@@ -191,12 +190,12 @@ class _PresetPickerSheetState extends State<PresetPickerSheet> {
                                 size: 48, color: theme.colorScheme.outline),
                             const SizedBox(height: 12),
                             Text(
-                              'No presets configured yet.',
+                              PresetPickerLabels.noPresetsConfigured,
                               style: theme.textTheme.titleSmall,
                             ),
                             const SizedBox(height: 6),
                             Text(
-                              'Tap "Manage" above to create a group like "Filipino Savory Staples".',
+                              PresetPickerLabels.noPresetsHint,
                               textAlign: TextAlign.center,
                               style: theme.textTheme.bodySmall?.copyWith(
                                   color: theme.colorScheme.onSurfaceVariant),
@@ -216,7 +215,7 @@ class _PresetPickerSheetState extends State<PresetPickerSheet> {
                                     size: 48, color: theme.colorScheme.outline),
                                 const SizedBox(height: 12),
                                 Text(
-                                  'No ingredients match "$query"',
+                                  PresetPickerLabels.noIngredientsMatch(query),
                                   style: theme.textTheme.titleSmall,
                                   textAlign: TextAlign.center,
                                 ),
@@ -309,8 +308,8 @@ class _PresetPickerSheetState extends State<PresetPickerSheet> {
                           ? null
                           : () => _addSelected(context, groups),
                       child: Text(_selectedIds.isEmpty
-                          ? 'Select ingredients to add'
-                          : 'Add Selected (${_selectedIds.length})'),
+                          ? PresetPickerLabels.selectIngredientsToAdd
+                          : PresetPickerLabels.addSelected(_selectedIds.length)),
                     ),
                   ),
                 ),
@@ -339,7 +338,7 @@ class _GroupSelectAllCheckbox extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text('All', style: Theme.of(context).textTheme.labelSmall),
+        Text(CommonLabels.all, style: Theme.of(context).textTheme.labelSmall),
         Checkbox(
           value: allSelected,
           onChanged: (checked) => onChanged(checked ?? false),

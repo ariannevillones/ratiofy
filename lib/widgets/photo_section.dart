@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../models/recipe.dart';
 import '../providers/recipe_provider.dart';
 import '../utils/image_display.dart';
+import '../utils/ui_labels.dart';
 
 /// Horizontal strip of photo thumbnails for a recipe, with an "add photo"
 /// tile (camera or gallery) shown while under the max, and a tap-to-expand
@@ -26,12 +27,12 @@ class PhotoSection extends StatelessWidget {
       if (!added) {
         messenger.showSnackBar(
           const SnackBar(
-              content: Text('You can add up to 3 photos per recipe.')),
+              content: Text(PhotoSectionLabels.maxPhotosReached)),
         );
       }
     } catch (e) {
       messenger.showSnackBar(
-        SnackBar(content: Text('Couldn\'t access camera/gallery: $e')),
+        SnackBar(content: Text(PhotoSectionLabels.cameraAccessError(e))),
       );
     }
   }
@@ -48,7 +49,7 @@ class PhotoSection extends StatelessWidget {
             children: [
               ListTile(
                 leading: const Icon(Icons.photo_camera_outlined),
-                title: const Text('Take Photo'),
+                title: const Text(PhotoSectionLabels.takePhoto),
                 onTap: () {
                   Navigator.of(sheetContext).pop();
                   _pickImage(context, ImageSource.camera);
@@ -56,7 +57,7 @@ class PhotoSection extends StatelessWidget {
               ),
               ListTile(
                 leading: const Icon(Icons.photo_library_outlined),
-                title: const Text('Choose from Gallery'),
+                title: const Text(PhotoSectionLabels.chooseFromGallery),
                 onTap: () {
                   Navigator.of(sheetContext).pop();
                   _pickImage(context, ImageSource.gallery);
@@ -93,7 +94,7 @@ class PhotoSection extends StatelessWidget {
                 right: 8,
                 child: IconButton.filledTonal(
                   icon: const Icon(Icons.close),
-                  tooltip: 'Close',
+                  tooltip: PhotoSectionLabels.closeTooltip,
                   onPressed: () => Navigator.of(dialogContext).pop(),
                 ),
               ),
@@ -107,24 +108,24 @@ class PhotoSection extends StatelessWidget {
                     foregroundColor:
                         Theme.of(context).colorScheme.onErrorContainer,
                   ),
-                  tooltip: 'Delete photo',
+                  tooltip: PhotoSectionLabels.deletePhotoTooltip,
                   icon: const Icon(Icons.delete_outline),
                   onPressed: () async {
                     final confirmed = await showDialog<bool>(
                       context: dialogContext,
                       builder: (confirmContext) => AlertDialog(
-                        title: const Text('Delete photo?'),
-                        content: const Text('This can\'t be undone.'),
+                        title: const Text(PhotoSectionLabels.deletePhotoTitle),
+                        content: const Text(CommonLabels.cannotBeUndone),
                         actions: [
                           TextButton(
                             onPressed: () =>
                                 Navigator.of(confirmContext).pop(false),
-                            child: const Text('Cancel'),
+                            child: const Text(CommonLabels.cancel),
                           ),
                           FilledButton.tonal(
                             onPressed: () =>
                                 Navigator.of(confirmContext).pop(true),
-                            child: const Text('Delete'),
+                            child: const Text(CommonLabels.delete),
                           ),
                         ],
                       ),
@@ -160,13 +161,13 @@ class PhotoSection extends StatelessWidget {
           Row(
             children: [
               Text(
-                'Photos',
+                PhotoSectionLabels.photosLabel,
                 style: theme.textTheme.labelLarge
                     ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
               ),
               const SizedBox(width: 6),
               Text(
-                '(${photos.length}/${Recipe.maxPhotos})',
+                PhotoSectionLabels.photoCount(photos.length, Recipe.maxPhotos),
                 style: theme.textTheme.bodySmall
                     ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
               ),

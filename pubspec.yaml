@@ -13,11 +13,44 @@ dependencies:
   cupertino_icons: ^1.0.6
   shared_preferences: ^2.2.3
   image_picker: ^1.1.2
+  flutter_markdown_plus: ^1.0.3
+  url_launcher: ^6.3.1
+  share_plus: ^10.1.4
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^4.0.0
+  flutter_launcher_icons: ^0.14.3
+  flutter_native_splash: ^2.4.4
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/branding/
+  fonts:
+    - family: Space Grotesk
+      fonts:
+        - asset: assets/fonts/SpaceGrotesk-Variable.ttf
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  macos:
+    generate: true
+  web:
+    generate: true
+  image_path: "assets_generated/icon.png"
+  min_sdk_android: 21
+  remove_alpha_ios: true
+
+flutter_native_splash:
+  # No icon here on purpose: the native splash can't render the real
+  # "ratio·fy" wordmark (only Flutter's engine can), so showing the dot
+  # mark here first and the full wordmark a moment later on the in-app
+  # loading screen read as two different logos. Plain background color
+  # only, so the wordmark loading screen is the first (and only) branded
+  # thing the user actually sees.
+  color: "#FFFFFF"
+  color_dark: "#121212"
+  web: true

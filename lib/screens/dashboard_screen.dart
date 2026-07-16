@@ -3,28 +3,31 @@ import 'package:provider/provider.dart';
 
 import '../models/recipe.dart';
 import '../providers/domain_provider.dart';
+import '../providers/navigation_provider.dart';
 import '../providers/recipe_provider.dart';
+import '../providers/settings_provider.dart';
 import '../utils/app_info.dart';
 import '../utils/domains.dart';
+import '../utils/image_display.dart';
+import '../utils/ui_labels.dart';
+import '../widgets/add_recipe_sheet.dart';
 import '../widgets/domain_icon.dart';
-import '../widgets/ratiofy_wordmark.dart';
+import '../widgets/ratiofy_logo.dart';
 import '../widgets/recipe_card.dart';
+import 'quick_calculator_screen.dart';
 import 'recipe_detail_screen.dart';
 
-/// Sentinel used as the filter chip row's "all domains" selection.
-const String _allDomainsFilter = '__all__';
+/// How many of the most-recently-added recipes (and, separately,
+/// favorites) to show in each carousel.
+const int _carouselLimit = 10;
 
-enum _SortOption { oldest, newest, nameAsc, recentlyOpened }
-
-extension on _SortOption {
-  String get label => switch (this) {
-        _SortOption.oldest => 'Oldest first',
-        _SortOption.newest => 'Newest first',
-        _SortOption.nameAsc => 'Name (A-Z)',
-        _SortOption.recentlyOpened => 'Recently opened',
-      };
-}
-
+/// App home screen: a summary of what's in the app (recipe/ingredient/cost
+/// counts, tappable domain breakdown), a "continue where you left off"
+/// shortcut, quick actions (Add Recipe, Quick Ratio Calculator), and
+/// horizontal carousels of favorited and recently added recipes. Also has
+/// its own recipe search (by name, across every domain) for quick lookup
+/// without switching to the Recipes tab. The full, filterable/sortable
+/// recipe list still lives on its own "Recipes/Formulas" tab.
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
 
@@ -33,21 +36,9 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
-  late String _domainFilter;
-  _SortOption _sortOption = _SortOption.oldest;
   bool _isSearching = false;
   String _searchQuery = '';
   final TextEditingController _searchController = TextEditingController();
-
-  @override
-  void initState() {
-    super.initState();
-    // Restore whichever filter chip the user had selected last session —
-    // DomainProvider is guaranteed loaded by the time the dashboard mounts
-    // (the app startup gate waits on it).
-    _domainFilter =
-        context.read<DomainProvider>().lastFilterDomainId ?? _allDomainsFilter;
-  }
 
   @override
   void dispose() {
@@ -55,16 +46,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     super.dispose();
   }
 
-  void _setDomainFilter(String id) {
-    setState(() => _domainFilter = id);
-    context
-        .read<DomainProvider>()
-        .setLastFilterDomainId(id == _allDomainsFilter ? null : id);
-  }
-
-  void _startSearch() {
-    setState(() => _isSearching = true);
-  }
+  void _startSearch() => setState(() => _isSearching = true);
 
   void _stopSearch() {
     setState(() {
@@ -74,173 +56,40 @@ class _DashboardScreenState extends State<DashboardScreen> {
     });
   }
 
-  List<Recipe> _applySort(List<Recipe> recipes) {
-    final sorted = List<Recipe>.from(recipes);
-    switch (_sortOption) {
-      case _SortOption.oldest:
-        sorted.sort((a, b) => a.createdAt.compareTo(b.createdAt));
-        break;
-      case _SortOption.newest:
-        sorted.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-        break;
-      case _SortOption.nameAsc:
-        sorted.sort(
-            (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
-        break;
-      case _SortOption.recentlyOpened:
-        sorted.sort((a, b) => (b.lastOpenedAt ?? b.createdAt)
-            .compareTo(a.lastOpenedAt ?? a.createdAt));
-        break;
-    }
-    return sorted;
-  }
-
-  Future<void> _showAddRecipeDialog(BuildContext context) async {
-    final controller = TextEditingController();
-    final formKey = GlobalKey<FormState>();
-    final domainProvider = context.read<DomainProvider>();
-    final allDomains = domainProvider.allDomains;
-
-    // Prefer whatever the user is currently filtering by; otherwise fall
-    // back to the domain they most recently created a recipe in, so the
-    // dropdown doesn't always reset to "Food".
-    String selectedDomainId;
-    if (_domainFilter != _allDomainsFilter &&
-        allDomains.any((d) => d.id == _domainFilter)) {
-      selectedDomainId = _domainFilter;
-    } else {
-      final lastUsed = domainProvider.lastUsedDomainId;
-      selectedDomainId = (lastUsed != null &&
-              allDomains.any((d) => d.id == lastUsed))
-          ? lastUsed
-          : Domains.defaultId;
-    }
-
-    final result = await showDialog<Map<String, String>>(
+  Future<void> _confirmDeleteRecipe(
+      BuildContext context, Recipe recipe) async {
+    final confirmed = await showDialog<bool>(
       context: context,
-      builder: (dialogContext) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            final selectedDomain =
-                Domains.resolve(selectedDomainId, domainProvider.customDomains
-                    .map((d) => d.toDomainDef())
-                    .toList());
-            return AlertDialog(
-              title: const Text('New Recipe'),
-              content: Form(
-                key: formKey,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    DropdownButtonFormField<String>(
-                      initialValue: selectedDomainId,
-                      isExpanded: true,
-                      decoration: const InputDecoration(labelText: 'Domain'),
-                      items: [
-                        for (final domain in allDomains)
-                          DropdownMenuItem(
-                            value: domain.id,
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                DomainIconBadge(domain: domain, size: 24),
-                                const SizedBox(width: 8),
-                                Text(domain.name),
-                              ],
-                            ),
-                          ),
-                      ],
-                      onChanged: (value) {
-                        if (value != null) {
-                          setDialogState(() => selectedDomainId = value);
-                        }
-                      },
-                    ),
-                    const SizedBox(height: 12),
-                    TextFormField(
-                      controller: controller,
-                      autofocus: true,
-                      textCapitalization: TextCapitalization.words,
-                      decoration: InputDecoration(
-                        labelText: 'Recipe name',
-                        hintText: selectedDomain.exampleName,
-                      ),
-                      validator: (value) {
-                        if (value == null || value.trim().isEmpty) {
-                          return 'Please enter a recipe name';
-                        }
-                        return null;
-                      },
-                      onFieldSubmitted: (value) {
-                        if (formKey.currentState!.validate()) {
-                          Navigator.of(dialogContext).pop({
-                            'name': value.trim(),
-                            'domainId': selectedDomainId,
-                          });
-                        }
-                      },
-                    ),
-                  ],
-                ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(dialogContext).pop(),
-                  child: const Text('Cancel'),
-                ),
-                FilledButton(
-                  onPressed: () {
-                    if (formKey.currentState!.validate()) {
-                      Navigator.of(dialogContext).pop({
-                        'name': controller.text.trim(),
-                        'domainId': selectedDomainId,
-                      });
-                    }
-                  },
-                  child: const Text('Add'),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
-
-    final name = result?['name'];
-    if (name != null && name.isNotEmpty && context.mounted) {
-      final domainId = result!['domainId']!;
-      final provider = context.read<RecipeProvider>();
-      final recipe = provider.addRecipe(name, domainId: domainId);
-      await domainProvider.setLastUsedDomainId(domainId);
-      if (context.mounted) {
-        Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => RecipeDetailScreen(recipeId: recipe.id),
+      builder: (dialogContext) => AlertDialog(
+        title: const Text(RecipesLabels.deleteRecipeTitle),
+        content: Text(RecipesLabels.deleteRecipeContent(recipe.name)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text(CommonLabels.cancel),
           ),
-        );
-      }
-    }
-  }
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text(CommonLabels.delete),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
 
-  void _deleteRecipeWithUndo(
-      BuildContext context, List<Recipe> allRecipes, Recipe recipe) {
-    final provider = context.read<RecipeProvider>();
-    final index = allRecipes.indexOf(recipe);
-    provider.deleteRecipe(recipe.id);
+    context.read<RecipeProvider>().deleteRecipe(recipe.id);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('Deleted "${recipe.name}"'),
-        action: SnackBarAction(
-          label: 'Undo',
-          onPressed: () => provider.restoreRecipe(recipe, index),
-        ),
+        content: Text(CommonLabels.deleted(recipe.name)),
+        duration: const Duration(seconds: 1),
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return Scaffold(
       appBar: AppBar(
         toolbarHeight: _isSearching ? kToolbarHeight : kToolbarHeight + 14,
@@ -249,253 +98,503 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 controller: _searchController,
                 autofocus: true,
                 decoration: const InputDecoration(
-                  hintText: 'Search recipes…',
+                  hintText: RecipesLabels.searchHint,
                   border: InputBorder.none,
                 ),
-                style: Theme.of(context).textTheme.titleMedium,
+                style: theme.textTheme.titleMedium,
                 onChanged: (value) => setState(() => _searchQuery = value),
               )
             : Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const RatiofyWordmark(fontSize: 22),
+                  const RatiofyLogo(iconSize: 26, fontSize: 20),
                   Text(
                     AppInfo.tagline,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Theme.of(context)
-                              .colorScheme
-                              .onSurfaceVariant,
-                        ),
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
                   ),
                 ],
               ),
         actions: [
           if (_isSearching)
             IconButton(
-              tooltip: 'Close search',
+              tooltip: RecipesLabels.closeSearchTooltip,
               icon: const Icon(Icons.close),
               onPressed: _stopSearch,
             )
-          else ...[
+          else
             IconButton(
-              tooltip: 'Search recipes',
+              tooltip: RecipesLabels.searchTooltip,
               icon: const Icon(Icons.search),
               onPressed: _startSearch,
             ),
-            PopupMenuButton<_SortOption>(
-              tooltip: 'Sort recipes',
-              icon: const Icon(Icons.sort),
-              onSelected: (option) => setState(() => _sortOption = option),
-              itemBuilder: (context) => [
-                for (final option in _SortOption.values)
-                  CheckedPopupMenuItem(
-                    value: option,
-                    checked: option == _sortOption,
-                    child: Text(option.label),
-                  ),
-              ],
-            ),
-          ],
         ],
       ),
-      body: Consumer2<RecipeProvider, DomainProvider>(
-        builder: (context, provider, domainProvider, _) {
-          final allRecipes = provider.recipes;
-          final allDomains = domainProvider.allDomains;
+      body: Consumer3<RecipeProvider, DomainProvider, SettingsProvider>(
+        builder: (context, recipeProvider, domainProvider, settings, _) {
+          final recipes = recipeProvider.recipes;
+          final query = _searchQuery.trim().toLowerCase();
 
-          // Counts per domain, in catalog order, skipping domains with no
-          // recipes — feeds both the summary header and the filter chips.
+          if (_isSearching && query.isNotEmpty) {
+            final matches = recipes
+                .where((r) => r.name.toLowerCase().contains(query))
+                .toList();
+            return matches.isEmpty
+                ? Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(32),
+                      child: Text(
+                        CommonLabels.noMatchFor('recipes', query),
+                        style: theme.textTheme.titleMedium,
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  )
+                : ListView.builder(
+                    padding: const EdgeInsets.only(top: 12, bottom: 96),
+                    itemCount: matches.length,
+                    itemBuilder: (context, index) {
+                      final recipe = matches[index];
+                      return RecipeCard(
+                        recipe: recipe,
+                        domain: domainProvider.resolve(recipe.domainId),
+                        onTap: () => Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) =>
+                                RecipeDetailScreen(recipeId: recipe.id),
+                          ),
+                        ),
+                        onDelete: () => _confirmDeleteRecipe(context, recipe),
+                        onToggleFavorite: () => recipeProvider
+                            .toggleFavorite(recipe.id),
+                      );
+                    },
+                  );
+          }
+
           final countsByDomainId = <String, int>{};
-          for (final r in allRecipes) {
+          var totalIngredients = 0;
+          double totalCost = 0;
+          var costRecipeCount = 0;
+          for (final r in recipes) {
             countsByDomainId[r.domainId] =
                 (countsByDomainId[r.domainId] ?? 0) + 1;
+            totalIngredients += r.ingredients.length;
+            final cost = r.totalCost;
+            if (cost != null) {
+              totalCost += cost;
+              costRecipeCount++;
+            }
           }
           final domainsInUse = [
-            for (final d in allDomains)
+            for (final d in domainProvider.allDomains)
               if (countsByDomainId.containsKey(d.id)) d,
           ];
 
-          var recipes = _domainFilter == _allDomainsFilter
-              ? allRecipes
-              : allRecipes
-                  .where((r) => r.domainId == _domainFilter)
-                  .toList(growable: false);
+          final recent = List<Recipe>.from(recipes)
+            ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+          final recentTop = recent.take(_carouselLimit).toList();
 
-          final query = _searchQuery.trim().toLowerCase();
-          if (query.isNotEmpty) {
-            recipes = recipes
-                .where((r) => r.name.toLowerCase().contains(query))
-                .toList(growable: false);
+          final favorites = recipes.where((r) => r.isFavorite).toList()
+            ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+          final favoritesTop = favorites.take(_carouselLimit).toList();
+
+          Recipe? continueRecipe;
+          for (final r in recipes) {
+            if (r.lastOpenedAt == null) continue;
+            if (continueRecipe == null ||
+                r.lastOpenedAt!.isAfter(continueRecipe.lastOpenedAt!)) {
+              continueRecipe = r;
+            }
           }
 
-          recipes = _applySort(recipes);
-
-          return Column(
+          return ListView(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
             children: [
-              if (allRecipes.isNotEmpty && !_isSearching)
-                _DomainSummaryHeader(
-                  domains: domainsInUse,
-                  countsByDomainId: countsByDomainId,
-                ),
-              if (domainsInUse.length > 1 && !_isSearching)
-                _DomainFilterBar(
-                  domains: domainsInUse,
-                  selected: _domainFilter,
-                  onSelected: _setDomainFilter,
-                ),
-              Expanded(
-                child: recipes.isEmpty
-                    ? Center(
-                        child: Padding(
-                          padding: const EdgeInsets.all(32),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                Icons.menu_book_outlined,
-                                size: 64,
-                                color: Theme.of(context).colorScheme.outline,
-                              ),
-                              const SizedBox(height: 16),
-                              Text(
-                                allRecipes.isEmpty
-                                    ? 'No recipes yet'
-                                    : (query.isNotEmpty
-                                        ? 'No recipes match "$query"'
-                                        : 'No recipes in this domain'),
-                                style:
-                                    Theme.of(context).textTheme.titleLarge,
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                'Tap the + button to add your first recipe.',
-                                textAlign: TextAlign.center,
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .bodyMedium
-                                    ?.copyWith(
-                                      color: Theme.of(context)
-                                          .colorScheme
-                                          .onSurfaceVariant,
-                                    ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      )
-                    : ListView.builder(
-                        padding: const EdgeInsets.only(top: 12, bottom: 96),
-                        itemCount: recipes.length,
-                        itemBuilder: (context, index) {
-                          final recipe = recipes[index];
-                          return RecipeCard(
-                            recipe: recipe,
-                            domain: domainProvider.resolve(recipe.domainId),
-                            onTap: () {
-                              Navigator.of(context).push(
-                                MaterialPageRoute(
-                                  builder: (_) => RecipeDetailScreen(
-                                      recipeId: recipe.id),
-                                ),
-                              );
-                            },
-                            onDelete: () => _deleteRecipeWithUndo(
-                                context, allRecipes, recipe),
-                          );
-                        },
-                      ),
+              _SummaryCard(
+                recipeCount: recipes.length,
+                ingredientCount: totalIngredients,
+                totalCost: costRecipeCount > 0 ? totalCost : null,
+                currencySymbol: settings.currencySymbol,
+                domainsInUse: domainsInUse,
+                countsByDomainId: countsByDomainId,
               ),
+              const SizedBox(height: 20),
+              const Divider(height: 1),
+              const SizedBox(height: 20),
+              Text(
+                AppInfo.name,
+                style: theme.textTheme.titleMedium
+                    ?.copyWith(fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: _MenuIconAction(
+                      icon: Icons.add_circle_outline,
+                      label: DashboardLabels.addRecipeCardTitle,
+                      onTap: () => showAddRecipeOptions(context),
+                    ),
+                  ),
+                  Expanded(
+                    child: _MenuIconAction(
+                      icon: Icons.calculate_outlined,
+                      label: DashboardLabels.quickCalculatorTitle,
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => const QuickCalculatorScreen(),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              if (continueRecipe != null) ...[
+                const SizedBox(height: 20),
+                const Divider(height: 1),
+                const SizedBox(height: 20),
+                Text(
+                  DashboardLabels.continueLabel,
+                  style: theme.textTheme.titleMedium
+                      ?.copyWith(fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 10),
+                RecipeCard(
+                  recipe: continueRecipe,
+                  domain: domainProvider.resolve(continueRecipe.domainId),
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) =>
+                          RecipeDetailScreen(recipeId: continueRecipe!.id),
+                    ),
+                  ),
+                  onDelete: () =>
+                      _confirmDeleteRecipe(context, continueRecipe!),
+                  onToggleFavorite: () =>
+                      recipeProvider.toggleFavorite(continueRecipe!.id),
+                ),
+              ],
+              const SizedBox(height: 20),
+              const Divider(height: 1),
+              const SizedBox(height: 20),
+              if (favoritesTop.isNotEmpty) ...[
+                Text(
+                  DashboardLabels.favoritesHeader,
+                  style: theme.textTheme.titleMedium
+                      ?.copyWith(fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 10),
+                _RecipeCarousel(
+                  recipes: favoritesTop,
+                  domainProvider: domainProvider,
+                ),
+                const SizedBox(height: 20),
+                const Divider(height: 1),
+                const SizedBox(height: 20),
+              ],
+              Text(
+                DashboardLabels.recentRecipesHeader,
+                style: theme.textTheme.titleMedium
+                    ?.copyWith(fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 10),
+              if (recentTop.isEmpty)
+                Text(
+                  DashboardLabels.noRecentRecipesYet,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                )
+              else
+                _RecipeCarousel(
+                  recipes: recentTop,
+                  domainProvider: domainProvider,
+                ),
             ],
           );
         },
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        // Distinct per screen so Flutter doesn't try to Hero-morph this FAB
-        // into another screen's FAB across a route transition (they'd
-        // otherwise share the same default tag and crash on push).
-        heroTag: 'dashboard_add_recipe_fab',
-        onPressed: () => _showAddRecipeDialog(context),
-        icon: const Icon(Icons.add),
-        label: const Text('Add Recipe'),
       ),
     );
   }
 }
 
-/// Text row summarizing how many recipes fall under each domain in use —
-/// e.g. "3 Food · 2 Chemical" — so the count is visible even when the
-/// filter chips are collapsed to a single domain.
-class _DomainSummaryHeader extends StatelessWidget {
-  final List<DomainDef> domains;
+/// Recipe/ingredient/cost counts plus a tappable per-domain breakdown —
+/// tapping a domain chip jumps to the Recipes tab pre-filtered to it.
+class _SummaryCard extends StatelessWidget {
+  final int recipeCount;
+  final int ingredientCount;
+  final double? totalCost;
+  final String currencySymbol;
+  final List<DomainDef> domainsInUse;
   final Map<String, int> countsByDomainId;
 
-  const _DomainSummaryHeader({
-    required this.domains,
+  const _SummaryCard({
+    required this.recipeCount,
+    required this.ingredientCount,
+    required this.totalCost,
+    required this.currencySymbol,
+    required this.domainsInUse,
     required this.countsByDomainId,
   });
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final summary = domains
-        .map((d) => '${countsByDomainId[d.id]} ${d.name}')
-        .join(' · ');
+    final cost = totalCost;
 
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
-      child: Align(
-        alignment: Alignment.centerLeft,
-        child: Text(
-          summary,
-          style: theme.textTheme.bodySmall
-              ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+    return Card(
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: _StatTile(
+                    value: '$recipeCount',
+                    label: recipeCount == 1
+                        ? DashboardLabels.recipeStatSingular
+                        : DashboardLabels.recipeStatPlural,
+                  ),
+                ),
+                Expanded(
+                  child: _StatTile(
+                    value: '$ingredientCount',
+                    label: DashboardLabels.ingredientStat,
+                  ),
+                ),
+                if (cost != null)
+                  Expanded(
+                    child: _StatTile(
+                      value: '$currencySymbol${cost.toStringAsFixed(2)}',
+                      label: DashboardLabels.costStat,
+                    ),
+                  ),
+              ],
+            ),
+            if (domainsInUse.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: [
+                  for (final domain in domainsInUse)
+                    ActionChip(
+                      avatar: DomainIconBadge(domain: domain, size: 18),
+                      label: Text('${countsByDomainId[domain.id]} '
+                          '${domain.name}'),
+                      visualDensity: VisualDensity.compact,
+                      onPressed: () => context
+                          .read<NavigationProvider>()
+                          .goToRecipesFilteredByDomain(domain.id),
+                    ),
+                ],
+              ),
+            ],
+          ],
         ),
       ),
     );
   }
 }
 
-/// Horizontal row of filter chips — "All" plus one per domain currently in
-/// use — letting the user narrow the recipe list to a single domain.
-class _DomainFilterBar extends StatelessWidget {
-  final List<DomainDef> domains;
-  final String selected;
-  final ValueChanged<String> onSelected;
+class _StatTile extends StatelessWidget {
+  final String value;
+  final String label;
 
-  const _DomainFilterBar({
-    required this.domains,
-    required this.selected,
-    required this.onSelected,
+  const _StatTile({required this.value, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          value,
+          style: theme.textTheme.headlineMedium?.copyWith(
+            fontWeight: FontWeight.w700,
+            color: theme.colorScheme.primary,
+          ),
+        ),
+        Text(
+          label,
+          style: theme.textTheme.bodySmall
+              ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+        ),
+      ],
+    );
+  }
+}
+
+/// Icon-plus-label menu shortcut — used for "Add Recipe/Formula" and
+/// "Quick Ratio Calculator" under the Ratiofy section.
+class _MenuIconAction extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  const _MenuIconAction({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CircleAvatar(
+              radius: 26,
+              backgroundColor: theme.colorScheme.primaryContainer,
+              child: Icon(icon, color: theme.colorScheme.onPrimaryContainer),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              label,
+              textAlign: TextAlign.center,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.labelSmall,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Horizontal, non-scrollable-height row of [_RecipeMiniCard]s — shared by
+/// the Favorites and Recently Added sections.
+class _RecipeCarousel extends StatelessWidget {
+  final List<Recipe> recipes;
+  final DomainProvider domainProvider;
+
+  const _RecipeCarousel({
+    required this.recipes,
+    required this.domainProvider,
   });
 
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 48,
-      child: ListView(
+      height: 156,
+      child: ListView.separated(
         scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 4),
-            child: ChoiceChip(
-              label: const Text('All'),
-              selected: selected == _allDomainsFilter,
-              onSelected: (_) => onSelected(_allDomainsFilter),
-            ),
-          ),
-          for (final domain in domains)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4),
-              child: ChoiceChip(
-                avatar: DomainIconBadge(domain: domain, size: 18),
-                label: Text(domain.name),
-                selected: selected == domain.id,
-                onSelected: (_) => onSelected(domain.id),
+        clipBehavior: Clip.none,
+        itemCount: recipes.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 12),
+        itemBuilder: (context, index) {
+          final recipe = recipes[index];
+          return _RecipeMiniCard(
+            recipe: recipe,
+            domain: domainProvider.resolve(recipe.domainId),
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => RecipeDetailScreen(recipeId: recipe.id),
               ),
             ),
-        ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+/// Compact card for the Favorites/Recently Added carousels — a photo or
+/// domain-icon header (with a small favorite badge when relevant) plus the
+/// recipe name and domain.
+class _RecipeMiniCard extends StatelessWidget {
+  final Recipe recipe;
+  final DomainDef domain;
+  final VoidCallback onTap;
+
+  const _RecipeMiniCard({
+    required this.recipe,
+    required this.domain,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final palette = domain.paletteFor(theme.brightness);
+    final hasPhoto = recipe.photoPaths.isNotEmpty;
+
+    return SizedBox(
+      width: 132,
+      child: Card(
+        clipBehavior: Clip.antiAlias,
+        margin: EdgeInsets.zero,
+        child: InkWell(
+          onTap: onTap,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Stack(
+                children: [
+                  Container(
+                    height: 80,
+                    width: double.infinity,
+                    color: palette.container,
+                    alignment: Alignment.center,
+                    child: hasPhoto
+                        ? buildImageFromPath(recipe.photoPaths.first,
+                            fit: BoxFit.cover)
+                        : Icon(domain.icon,
+                            color: palette.onContainer, size: 28),
+                  ),
+                  if (recipe.isFavorite)
+                    Positioned(
+                      top: 4,
+                      right: 4,
+                      child: Icon(Icons.star,
+                          size: 16,
+                          color: theme.colorScheme.tertiary,
+                          shadows: const [
+                            Shadow(color: Colors.black45, blurRadius: 3),
+                          ]),
+                    ),
+                ],
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(8, 6, 8, 8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      recipe.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.labelLarge
+                          ?.copyWith(fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      domain.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

@@ -44,6 +44,10 @@ class Recipe {
   double? yieldQuantity;
   String yieldUnit;
 
+  /// Whether the user has pinned this recipe as a favorite — powers the
+  /// Dashboard's Favorites carousel.
+  bool isFavorite;
+
   /// Monotonically increasing counter used to assign unique, stable
   /// ref numbers to ingredients — never reused even after deletion.
   int _nextRefNumber;
@@ -61,6 +65,7 @@ class Recipe {
     this.lastOpenedAt,
     this.yieldQuantity,
     this.yieldUnit = '',
+    this.isFavorite = false,
   })  : domainId = domainId ?? Domains.defaultId,
         ingredients = ingredients ?? [],
         photoPaths = photoPaths ?? [],
@@ -88,6 +93,25 @@ class Recipe {
     }
     return null;
   }
+
+  /// The unit "Calculate" > "By batch total" treats its target total as
+  /// being expressed in by default — the first checked ingredient's unit.
+  /// Null if no ingredient is checked. The user can override this via the
+  /// "By batch total" unit picker, which only offers [checkedIngredientUnits].
+  String? get batchTotalUnit {
+    for (final ingredient in ingredients) {
+      if (ingredient.includeInCalculation) return ingredient.unit;
+    }
+    return null;
+  }
+
+  /// Distinct units used by currently-checked ingredients, in the order
+  /// they first appear — populates the "By batch total" unit picker so it
+  /// only ever offers units actually in play, not the full unit catalog.
+  Set<String> get checkedIngredientUnits => {
+        for (final ingredient in ingredients)
+          if (ingredient.includeInCalculation) ingredient.unit,
+      };
 
   /// Sum of every ingredient's most current cost (its post-calculate
   /// `newCost` if one exists, otherwise its entered `cost`). Null if no
@@ -127,6 +151,7 @@ class Recipe {
         'lastOpenedAt': lastOpenedAt?.toIso8601String(),
         'yieldQuantity': yieldQuantity,
         'yieldUnit': yieldUnit,
+        'isFavorite': isFavorite,
       };
 
   factory Recipe.fromJson(Map<String, dynamic> json) {
@@ -151,6 +176,7 @@ class Recipe {
           : null,
       yieldQuantity: (json['yieldQuantity'] as num?)?.toDouble(),
       yieldUnit: json['yieldUnit'] as String? ?? '',
+      isFavorite: json['isFavorite'] as bool? ?? false,
     );
   }
 }

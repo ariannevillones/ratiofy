@@ -3,12 +3,14 @@ import 'package:flutter/material.dart';
 import '../models/recipe.dart';
 import '../utils/domains.dart';
 import '../utils/image_display.dart';
+import '../utils/ui_labels.dart';
 
 class RecipeCard extends StatelessWidget {
   final Recipe recipe;
   final DomainDef domain;
   final VoidCallback onTap;
   final VoidCallback onDelete;
+  final VoidCallback onToggleFavorite;
 
   const RecipeCard({
     super.key,
@@ -16,6 +18,7 @@ class RecipeCard extends StatelessWidget {
     required this.domain,
     required this.onTap,
     required this.onDelete,
+    required this.onToggleFavorite,
   });
 
   @override
@@ -47,14 +50,16 @@ class RecipeCard extends StatelessWidget {
                     const SizedBox(height: 4),
                     Row(
                       children: [
-                        _DomainBadge(domain: domain),
+                        Flexible(child: _DomainBadge(domain: domain)),
                         const SizedBox(width: 6),
-                        Text(
-                          ingredientCount == 1
-                              ? '1 ingredient'
-                              : '$ingredientCount ingredients',
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.onSurfaceVariant,
+                        Flexible(
+                          child: Text(
+                            RecipeCardLabels.ingredientCount(ingredientCount),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
                           ),
                         ),
                         if (recipe.notes.trim().isNotEmpty) ...[
@@ -68,8 +73,20 @@ class RecipeCard extends StatelessWidget {
                   ],
                 ),
               ),
+              IconButton(
+                tooltip: recipe.isFavorite
+                    ? RecipeCardLabels.unfavoriteTooltip
+                    : RecipeCardLabels.favoriteTooltip,
+                icon: Icon(
+                  recipe.isFavorite ? Icons.star : Icons.star_border,
+                  color: recipe.isFavorite
+                      ? theme.colorScheme.tertiary
+                      : theme.colorScheme.onSurfaceVariant,
+                ),
+                onPressed: onToggleFavorite,
+              ),
               IconButton.outlined(
-                tooltip: 'Delete recipe',
+                tooltip: RecipeCardLabels.deleteTooltip,
                 icon: const Icon(Icons.delete_outline),
                 onPressed: onDelete,
               ),
@@ -104,11 +121,15 @@ class _DomainBadge extends StatelessWidget {
         children: [
           Icon(domain.icon, size: 11, color: palette.onContainer),
           const SizedBox(width: 3),
-          Text(
-            domain.name,
-            style: theme.textTheme.labelSmall?.copyWith(
-              color: palette.onContainer,
-              fontWeight: FontWeight.w600,
+          Flexible(
+            child: Text(
+              domain.name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: palette.onContainer,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
         ],

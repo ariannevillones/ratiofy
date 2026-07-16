@@ -12,9 +12,10 @@ import '../providers/settings_provider.dart';
 import '../utils/app_info.dart';
 import '../utils/currencies.dart';
 import '../utils/domains.dart';
+import '../utils/ui_labels.dart';
 import '../utils/units.dart';
 import '../widgets/domain_icon.dart';
-import '../widgets/ratiofy_wordmark.dart';
+import '../widgets/ratiofy_logo.dart';
 import '../widgets/unit_dropdown_field.dart';
 
 class SettingsScreen extends StatelessWidget {
@@ -33,7 +34,7 @@ class SettingsScreen extends StatelessWidget {
       context: context,
       builder: (dialogContext) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
-          title: const Text('New Domain'),
+          title: const Text(SettingsLabels.newDomainDialogTitle),
           content: SizedBox(
             width: 360,
             child: SingleChildScrollView(
@@ -48,16 +49,17 @@ class SettingsScreen extends StatelessWidget {
                       autofocus: true,
                       textCapitalization: TextCapitalization.words,
                       decoration: const InputDecoration(
-                        labelText: 'Domain name',
-                        hintText: 'e.g. Candles, Aquarium Mix',
+                        labelText: SettingsLabels.domainNameLabel,
+                        hintText: SettingsLabels.domainNameHint,
                       ),
                       validator: (value) =>
                           (value == null || value.trim().isEmpty)
-                              ? 'Please enter a name'
+                              ? CommonLabels.pleaseEnterAName
                               : null,
                     ),
                     const SizedBox(height: 12),
-                    Text('Icon', style: Theme.of(context).textTheme.labelMedium),
+                    Text(SettingsLabels.iconLabel,
+                        style: Theme.of(context).textTheme.labelMedium),
                     const SizedBox(height: 6),
                     Wrap(
                       spacing: 8,
@@ -74,7 +76,8 @@ class SettingsScreen extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 12),
-                    Text('Color', style: Theme.of(context).textTheme.labelMedium),
+                    Text(SettingsLabels.colorLabel,
+                        style: Theme.of(context).textTheme.labelMedium),
                     const SizedBox(height: 6),
                     Wrap(
                       spacing: 8,
@@ -91,16 +94,16 @@ class SettingsScreen extends StatelessWidget {
                     const SizedBox(height: 12),
                     UnitDropdownField(
                       value: defaultUnit,
-                      labelText: 'Default unit for new ingredients',
+                      labelText: SettingsLabels.defaultUnitLabel,
                       onChanged: (value) =>
                           setDialogState(() => defaultUnit = value),
                     ),
                     const SizedBox(height: 4),
                     SwitchListTile(
                       contentPadding: EdgeInsets.zero,
-                      title: const Text('Show cost field'),
-                      subtitle: const Text(
-                          'Turn off for domains where price isn\'t relevant'),
+                      title: const Text(SettingsLabels.showCostFieldTitle),
+                      subtitle:
+                          const Text(SettingsLabels.showCostFieldSubtitle),
                       value: costVisible,
                       onChanged: (value) =>
                           setDialogState(() => costVisible = value),
@@ -109,8 +112,8 @@ class SettingsScreen extends StatelessWidget {
                     TextFormField(
                       controller: extraFieldController,
                       decoration: const InputDecoration(
-                        labelText: 'Extra field (optional)',
-                        hintText: 'e.g. CAS Number, INCI Name, Batch code',
+                        labelText: SettingsLabels.extraFieldOptionalLabel,
+                        hintText: SettingsLabels.extraFieldHint,
                       ),
                     ),
                   ],
@@ -121,7 +124,7 @@ class SettingsScreen extends StatelessWidget {
           actions: [
             TextButton(
               onPressed: () => Navigator.of(dialogContext).pop(),
-              child: const Text('Cancel'),
+              child: const Text(CommonLabels.cancel),
             ),
             FilledButton(
               onPressed: () {
@@ -136,7 +139,7 @@ class SettingsScreen extends StatelessWidget {
                   });
                 }
               },
-              child: const Text('Add'),
+              child: const Text(CommonLabels.add),
             ),
           ],
         ),
@@ -170,7 +173,7 @@ class SettingsScreen extends StatelessWidget {
     await showDialog<void>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Export Backup'),
+        title: const Text(SettingsLabels.exportDialogTitle),
         content: SizedBox(
           width: 420,
           child: SingleChildScrollView(child: SelectableText(text)),
@@ -178,7 +181,7 @@ class SettingsScreen extends StatelessWidget {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(),
-            child: const Text('Close'),
+            child: const Text(CommonLabels.close),
           ),
           FilledButton.icon(
             onPressed: () async {
@@ -186,12 +189,13 @@ class SettingsScreen extends StatelessWidget {
               if (dialogContext.mounted) Navigator.of(dialogContext).pop();
               if (context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Copied to clipboard.')),
+                  const SnackBar(
+                      content: Text(CommonLabels.copiedToClipboard)),
                 );
               }
             },
             icon: const Icon(Icons.copy_all_outlined),
-            label: const Text('Copy to Clipboard'),
+            label: const Text(SettingsLabels.copyToClipboardButton),
           ),
         ],
       ),
@@ -204,7 +208,7 @@ class SettingsScreen extends StatelessWidget {
     final pasted = await showDialog<String>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Import Backup'),
+        title: const Text(SettingsLabels.importDialogTitle),
         content: SizedBox(
           width: 420,
           child: TextField(
@@ -213,19 +217,19 @@ class SettingsScreen extends StatelessWidget {
             maxLines: 10,
             minLines: 4,
             decoration: const InputDecoration(
-              hintText: 'Paste a backup exported from this app',
+              hintText: SettingsLabels.importHint,
             ),
           ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(),
-            child: const Text('Cancel'),
+            child: const Text(CommonLabels.cancel),
           ),
           FilledButton(
             onPressed: () =>
                 Navigator.of(dialogContext).pop(controller.text),
-            child: const Text('Import'),
+            child: const Text(SettingsLabels.importButton),
           ),
         ],
       ),
@@ -238,8 +242,7 @@ class SettingsScreen extends StatelessWidget {
       data = jsonDecode(pasted) as Map<String, dynamic>;
     } catch (_) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text('That doesn\'t look like a valid backup.')),
+        const SnackBar(content: Text(SettingsLabels.invalidBackup)),
       );
       return;
     }
@@ -247,17 +250,16 @@ class SettingsScreen extends StatelessWidget {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Replace all data?'),
-        content: const Text(
-            'Importing will replace every recipe, preset, and domain currently in the app. This can\'t be undone.'),
+        title: const Text(SettingsLabels.replaceAllDataTitle),
+        content: const Text(SettingsLabels.replaceAllDataContent),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('Cancel'),
+            child: const Text(CommonLabels.cancel),
           ),
           FilledButton.tonal(
             onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text('Replace'),
+            child: const Text(SettingsLabels.replaceButton),
           ),
         ],
       ),
@@ -286,7 +288,7 @@ class SettingsScreen extends StatelessWidget {
     }
 
     messenger.showSnackBar(
-      const SnackBar(content: Text('Backup imported.')),
+      const SnackBar(content: Text(SettingsLabels.backupImported)),
     );
   }
 
@@ -295,17 +297,16 @@ class SettingsScreen extends StatelessWidget {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Delete domain?'),
-        content: Text(
-            '"${domain.name}" will be removed. Recipes already using it will fall back to "Other".'),
+        title: const Text(SettingsLabels.deleteDomainTitle),
+        content: Text(SettingsLabels.deleteDomainContent(domain.name)),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('Cancel'),
+            child: const Text(CommonLabels.cancel),
           ),
           FilledButton.tonal(
             onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text('Delete'),
+            child: const Text(CommonLabels.delete),
           ),
         ],
       ),
@@ -323,19 +324,19 @@ class SettingsScreen extends StatelessWidget {
     final theme = Theme.of(context);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Settings')),
+      appBar: AppBar(title: const Text(SettingsLabels.appBarTitle)),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
           Text(
-            'Theme',
+            SettingsLabels.themeHeader,
             style: theme.textTheme.titleMedium?.copyWith(
               fontWeight: FontWeight.w600,
             ),
           ),
           const SizedBox(height: 4),
           Text(
-            'Choose how Ratiofy looks, or follow your device setting.',
+            SettingsLabels.themeDescription,
             style: theme.textTheme.bodySmall?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
             ),
@@ -345,17 +346,17 @@ class SettingsScreen extends StatelessWidget {
             segments: const [
               ButtonSegment(
                 value: ThemeMode.system,
-                label: Text('System'),
+                label: Text(SettingsLabels.themeSystem),
                 icon: Icon(Icons.brightness_auto_outlined),
               ),
               ButtonSegment(
                 value: ThemeMode.light,
-                label: Text('Light'),
+                label: Text(SettingsLabels.themeLight),
                 icon: Icon(Icons.light_mode_outlined),
               ),
               ButtonSegment(
                 value: ThemeMode.dark,
-                label: Text('Dark'),
+                label: Text(SettingsLabels.themeDark),
                 icon: Icon(Icons.dark_mode_outlined),
               ),
             ],
@@ -366,14 +367,14 @@ class SettingsScreen extends StatelessWidget {
           ),
           const SizedBox(height: 24),
           Text(
-            'Currency',
+            SettingsLabels.currencyHeader,
             style: theme.textTheme.titleMedium?.copyWith(
               fontWeight: FontWeight.w600,
             ),
           ),
           const SizedBox(height: 4),
           Text(
-            'Used for all ingredient cost fields across every recipe.',
+            SettingsLabels.currencyDescription,
             style: theme.textTheme.bodySmall?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
             ),
@@ -387,7 +388,7 @@ class SettingsScreen extends StatelessWidget {
                 initialValue: settings.currencyCode,
                 isExpanded: true,
                 decoration: const InputDecoration(
-                  labelText: 'Default currency',
+                  labelText: SettingsLabels.defaultCurrencyLabel,
                   border: InputBorder.none,
                 ),
                 items: [
@@ -408,14 +409,14 @@ class SettingsScreen extends StatelessWidget {
           ),
           const SizedBox(height: 24),
           Text(
-            'Domains',
+            SettingsLabels.domainsHeader,
             style: theme.textTheme.titleMedium?.copyWith(
               fontWeight: FontWeight.w600,
             ),
           ),
           const SizedBox(height: 4),
           Text(
-            'Categorize recipes by domain — Food, Chemical, Cosmetics, and Other are built in. Add your own for anything else.',
+            SettingsLabels.domainsDescription,
             style: theme.textTheme.bodySmall?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
             ),
@@ -430,7 +431,7 @@ class SettingsScreen extends StatelessWidget {
                   ListTile(
                     leading: DomainIconBadge(domain: domain),
                     title: Text(domain.name),
-                    trailing: const Text('Built-in'),
+                    trailing: const Text(SettingsLabels.builtIn),
                   ),
                 if (domainProvider.customDomains.isNotEmpty)
                   const Divider(height: 1),
@@ -439,7 +440,7 @@ class SettingsScreen extends StatelessWidget {
                     leading: DomainIconBadge(domain: domain.toDomainDef()),
                     title: Text(domain.name),
                     trailing: IconButton(
-                      tooltip: 'Delete domain',
+                      tooltip: SettingsLabels.deleteDomainTooltip,
                       icon: const Icon(Icons.delete_outline),
                       onPressed: () => _confirmDeleteDomain(context, domain),
                     ),
@@ -447,7 +448,7 @@ class SettingsScreen extends StatelessWidget {
                 const Divider(height: 1),
                 ListTile(
                   leading: const Icon(Icons.add),
-                  title: const Text('Add domain'),
+                  title: const Text(SettingsLabels.addDomain),
                   onTap: () => _showAddDomainDialog(context),
                 ),
               ],
@@ -455,14 +456,14 @@ class SettingsScreen extends StatelessWidget {
           ),
           const SizedBox(height: 24),
           Text(
-            'Backup & Restore',
+            SettingsLabels.backupHeader,
             style: theme.textTheme.titleMedium?.copyWith(
               fontWeight: FontWeight.w600,
             ),
           ),
           const SizedBox(height: 4),
           Text(
-            'Everything is stored only on this device. Export a backup before reinstalling or switching devices.',
+            SettingsLabels.backupDescription,
             style: theme.textTheme.bodySmall?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
             ),
@@ -475,15 +476,16 @@ class SettingsScreen extends StatelessWidget {
               children: [
                 ListTile(
                   leading: const Icon(Icons.upload_outlined),
-                  title: const Text('Export all data'),
-                  subtitle: const Text('Copy a backup to your clipboard'),
+                  title: const Text(SettingsLabels.exportAllData),
+                  subtitle:
+                      const Text(SettingsLabels.exportAllDataSubtitle),
                   onTap: () => _showExportDialog(context),
                 ),
                 const Divider(height: 1),
                 ListTile(
                   leading: const Icon(Icons.download_outlined),
-                  title: const Text('Import backup'),
-                  subtitle: const Text('Replaces all current data'),
+                  title: const Text(SettingsLabels.importBackup),
+                  subtitle: const Text(SettingsLabels.importBackupSubtitle),
                   onTap: () => _showImportDialog(context),
                 ),
               ],
@@ -491,7 +493,7 @@ class SettingsScreen extends StatelessWidget {
           ),
           const SizedBox(height: 24),
           Text(
-            'About',
+            SettingsLabels.aboutHeader,
             style: theme.textTheme.titleMedium?.copyWith(
               fontWeight: FontWeight.w600,
             ),
@@ -508,10 +510,10 @@ class SettingsScreen extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.baseline,
                     textBaseline: TextBaseline.alphabetic,
                     children: [
-                      const RatiofyWordmark(fontSize: 26),
+                      const RatiofyLogo(iconSize: 30, fontSize: 24),
                       const SizedBox(width: 8),
                       Text(
-                        'v${AppInfo.version}',
+                        SettingsLabels.versionLabel(AppInfo.version),
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: theme.colorScheme.onSurfaceVariant,
                         ),
@@ -536,7 +538,7 @@ class SettingsScreen extends StatelessWidget {
                         applicationVersion: AppInfo.version,
                       ),
                       icon: const Icon(Icons.description_outlined, size: 18),
-                      label: const Text('Open-source licenses'),
+                      label: const Text(SettingsLabels.openSourceLicenses),
                     ),
                   ),
                 ],

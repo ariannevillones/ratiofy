@@ -6,6 +6,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/ingredient.dart';
 import '../models/preset.dart';
 import '../models/recipe.dart';
+import '../utils/recipe_templates.dart';
+import '../utils/unit_conversion.dart';
 import '../utils/units.dart';
 
 /// Result of an attempted ingredient-add, used so the UI can show a
@@ -18,11 +20,20 @@ enum CalculateResult {
   noBaseSelected,
   invalidTargetQuantity,
   baseQuantityIsZero,
+  incompatibleUnits,
 }
 
 class RecipeProvider extends ChangeNotifier {
   static const _recipesKey = 'recipes.v1';
   static const _seqKey = 'recipes.sequenceCounters.v1';
+
+  /// One-time migration flag: ingredients used to default to unchecked
+  /// (excluded from Calculate), which meant Calculate silently did nothing
+  /// on recipes nobody had manually checked. Now that new ingredients
+  /// default to checked, this flips every already-saved ingredient to
+  /// checked too, once, so existing recipes aren't stuck on the old
+  /// behavior.
+  static const _includeAllMigrationKey = 'recipes.includeAllMigration.v1';
 
   final List<Recipe> _recipes = [];
   int _nextRecipeSeq = 1;
@@ -53,8 +64,8 @@ class RecipeProvider extends ChangeNotifier {
         final decoded = jsonDecode(recipesJson) as List<dynamic>;
         _recipes
           ..clear()
-          ..addAll(decoded
-              .map((e) => Recipe.fromJson(e as Map<String, dynamic>)));
+          ..addAll(
+              decoded.map((e) => Recipe.fromJson(e as Map<String, dynamic>)));
       } catch (_) {
         // Corrupt data — start fresh rather than crashing the app.
       }
@@ -71,14 +82,23 @@ class RecipeProvider extends ChangeNotifier {
       }
     }
 
+    if (!(prefs.getBool(_includeAllMigrationKey) ?? false)) {
+      for (final recipe in _recipes) {
+        for (final ingredient in recipe.ingredients) {
+          ingredient.includeInCalculation = true;
+        }
+      }
+      await prefs.setBool(_includeAllMigrationKey, true);
+      if (_recipes.isNotEmpty) await _persist();
+    }
+
     _isLoaded = true;
     notifyListeners();
   }
 
   Future<void> _persist() async {
     final prefs = await SharedPreferences.getInstance();
-    final recipesJson =
-        jsonEncode(_recipes.map((r) => r.toJson()).toList());
+    final recipesJson = jsonEncode(_recipes.map((r) => r.toJson()).toList());
     await prefs.setString(_recipesKey, recipesJson);
     await prefs.setString(
       _seqKey,
@@ -111,6 +131,33 @@ class RecipeProvider extends ChangeNotifier {
     return recipe;
   }
 
+  /// Creates a new recipe pre-filled from a [RecipeTemplate] — name,
+  /// domain, and every ingredient with its default quantity/unit — so the
+  /// user can add a common recipe/formula in one tap instead of building
+  /// it from scratch. Cost is left blank on every ingredient, matching
+  /// how preset ingredients behave.
+  Recipe addRecipeFromTemplate(RecipeTemplate template) {
+    final recipe = Recipe(
+      id: 'recipe_${_nextRecipeSeq++}_${DateTime.now().microsecondsSinceEpoch}',
+      name: template.name,
+      domainId: template.domainId,
+    );
+    for (final templateIngredient in template.ingredients) {
+      final refNumber = recipe.consumeNextRefNumber();
+      recipe.ingredients.add(Ingredient(
+        id: 'ing_${_nextIngredientSeq++}_${DateTime.now().microsecondsSinceEpoch}',
+        refNumber: refNumber,
+        name: templateIngredient.name,
+        quantity: templateIngredient.quantity,
+        unit: templateIngredient.unit,
+      ));
+    }
+    _recipes.add(recipe);
+    notifyListeners();
+    _persist();
+    return recipe;
+  }
+
   void setRecipeDomain(String recipeId, String domainId) {
     final recipe = getRecipe(recipeId);
     if (recipe == null) return;
@@ -119,17 +166,18 @@ class RecipeProvider extends ChangeNotifier {
     _persist();
   }
 
-  void deleteRecipe(String recipeId) {
-    _recipes.removeWhere((r) => r.id == recipeId);
+  /// Toggles whether [recipeId] is pinned as a favorite — powers the
+  /// Dashboard's Favorites carousel.
+  void toggleFavorite(String recipeId) {
+    final recipe = getRecipe(recipeId);
+    if (recipe == null) return;
+    recipe.isFavorite = !recipe.isFavorite;
     notifyListeners();
     _persist();
   }
 
-  /// Reinserts a previously-deleted recipe at [index] (clamped to the
-  /// current list length) — backs the "Undo" action on the delete snackbar.
-  void restoreRecipe(Recipe recipe, int index) {
-    final clamped = index.clamp(0, _recipes.length);
-    _recipes.insert(clamped, recipe);
+  void deleteRecipe(String recipeId) {
+    _recipes.removeWhere((r) => r.id == recipeId);
     notifyListeners();
     _persist();
   }
@@ -233,8 +281,7 @@ class RecipeProvider extends ChangeNotifier {
         final newCostSuffix = ingredient.newCost != null
             ? ', $currencySymbol${ingredient.newCost!.toStringAsFixed(2)}'
             : '';
-        buffer.writeln(
-            '    → new: $newQty ${ingredient.unit}$newCostSuffix');
+        buffer.writeln('    → new: $newQty ${ingredient.unit}$newCostSuffix');
       }
     }
 
@@ -481,7 +528,17 @@ class RecipeProvider extends ChangeNotifier {
   /// quantities sum to [targetTotal] — e.g. "make a 500 g batch total"
   /// rather than "make it so ingredient #2 is 100 g". Common for chemical
   /// or cosmetic formulations expressed as a percentage of total batch.
-  CalculateResult calculateByTotal(String recipeId, double targetTotal) {
+  ///
+  /// [targetTotal] is interpreted in [targetUnit] — or, if null, the first
+  /// checked ingredient's unit (see [Recipe.batchTotalUnit]). Every other
+  /// checked ingredient's quantity is converted into that unit before
+  /// summing, so e.g. 100 g + 0.1 kg correctly reads as 200 g rather than
+  /// 100.1. If any checked ingredient's unit can't convert to it (mixing
+  /// mass with a count unit like "piece", for instance), the sum wouldn't
+  /// be meaningful, so this returns [CalculateResult.incompatibleUnits]
+  /// instead of calculating.
+  CalculateResult calculateByTotal(String recipeId, double targetTotal,
+      {String? targetUnit}) {
     final recipe = getRecipe(recipeId);
     if (recipe == null) return CalculateResult.noBaseSelected;
 
@@ -493,8 +550,14 @@ class RecipeProvider extends ChangeNotifier {
         recipe.ingredients.where((i) => i.includeInCalculation).toList();
     if (checked.isEmpty) return CalculateResult.noBaseSelected;
 
-    final currentTotal =
-        checked.fold<double>(0, (sum, i) => sum + i.quantity);
+    final referenceUnit = targetUnit ?? checked.first.unit;
+    var currentTotal = 0.0;
+    for (final ingredient in checked) {
+      final converted =
+          UnitConversion.convert(ingredient.quantity, ingredient.unit, referenceUnit);
+      if (converted == null) return CalculateResult.incompatibleUnits;
+      currentTotal += converted;
+    }
     if (currentTotal == 0) return CalculateResult.baseQuantityIsZero;
 
     final ratio = targetTotal / currentTotal;

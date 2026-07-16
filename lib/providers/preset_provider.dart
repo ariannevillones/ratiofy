@@ -72,6 +72,7 @@ class PresetProvider extends ChangeNotifier {
     final hasNamedGroups = _groups.any((g) => g.id != ungroupedGroupId);
     if (!hasSeeded && !hasNamedGroups) {
       _groups.addAll([
+        _buildCommonIngredientsSeed(),
         _buildSavoryStaplesSeed(),
         _buildBakingStaplesSeed(),
         _buildMeatsSeed(),
@@ -117,6 +118,23 @@ class PresetProvider extends ChangeNotifier {
       label: label,
       domainId: domainId,
     );
+  }
+
+  /// Truly universal basics that aren't specific to any one domain — water,
+  /// salt, etc. show up in Food (cooking), Chemical (solvent/reagent), and
+  /// Cosmetics (carrier/base) alike. Unlike every other seed group, this
+  /// one is left unscoped (`domainId: null`) so it shows up no matter what
+  /// domain the recipe is in, same as the always-present Ungrouped group.
+  PresetGroup _buildCommonIngredientsSeed() {
+    final group = _seedGroup('Common Ingredients');
+    group.ingredients.addAll([
+      _seedIngredient('Water', quantity: 250, unit: 'ml'),
+      _seedIngredient('Salt', quantity: 1, unit: 'tsp'),
+      _seedIngredient('Sugar', quantity: 1, unit: 'tbsp'),
+      _seedIngredient('Oil', quantity: 2, unit: 'tbsp'),
+      _seedIngredient('Alcohol', quantity: 100, unit: 'ml'),
+    ]);
+    return group;
   }
 
   PresetGroup _buildSavoryStaplesSeed() {

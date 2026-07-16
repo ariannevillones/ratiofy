@@ -13,8 +13,8 @@ class Ingredient {
   double? cost;
 
   /// Whether this ingredient is included when "Calculate" is pressed.
-  /// Defaults to false (unchecked) per spec — unchecked ingredients are
-  /// ignored during calculation and keep their original quantity/cost.
+  /// Defaults to true (checked) — Calculate scales the whole recipe by
+  /// default; uncheck an ingredient to exclude it (e.g. "salt to taste").
   bool includeInCalculation;
 
   /// Results of the most recent calculation. Null until the user has
@@ -35,7 +35,7 @@ class Ingredient {
     required this.quantity,
     required this.unit,
     this.cost,
-    this.includeInCalculation = false,
+    this.includeInCalculation = true,
     this.newQuantity,
     this.newCost,
     this.extraField = '',
@@ -83,7 +83,7 @@ class Ingredient {
       quantity: (json['quantity'] as num?)?.toDouble() ?? 0,
       unit: json['unit'] as String? ?? Units.defaultUnit,
       cost: (json['cost'] as num?)?.toDouble(),
-      includeInCalculation: json['includeInCalculation'] as bool? ?? false,
+      includeInCalculation: json['includeInCalculation'] as bool? ?? true,
       newQuantity: (json['newQuantity'] as num?)?.toDouble(),
       newCost: (json['newCost'] as num?)?.toDouble(),
       extraField: json['extraField'] as String? ?? '',

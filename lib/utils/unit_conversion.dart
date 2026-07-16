@@ -1,8 +1,9 @@
 /// Multiplicative unit conversion between compatible units of measure —
-/// e.g. grams <-> kilograms, or cups <-> milliliters. Count units
-/// ('piece', 'bundle', 'pack') and Temperature ('°C', '°F', which need an
-/// offset, not a multiplier) are intentionally left unconvertible.
-enum _Quantity { volume, mass, length }
+/// e.g. grams <-> kilograms, cups <-> milliliters, or hours <-> seconds.
+/// Count units ('piece', 'bundle', 'pack') and Temperature ('°C', '°F',
+/// which need an offset, not a multiplier) are intentionally left
+/// unconvertible.
+enum _Quantity { volume, mass, length, time }
 
 class UnitConversion {
   static const Map<String, _Quantity> _quantityOf = {
@@ -23,6 +24,10 @@ class UnitConversion {
     'm': _Quantity.length,
     'in': _Quantity.length,
     'ft': _Quantity.length,
+    'ms': _Quantity.time,
+    's': _Quantity.time,
+    'h': _Quantity.time,
+    'd': _Quantity.time,
   };
 
   /// Factor to multiply a unit's value by to express it in its category's
@@ -45,6 +50,10 @@ class UnitConversion {
     'm': 1,
     'in': 0.0254,
     'ft': 0.3048,
+    'ms': 0.001,
+    's': 1,
+    'h': 3600,
+    'd': 86400,
   };
 
   static bool isConvertible(String unit) => _quantityOf.containsKey(unit);

@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../models/ingredient.dart';
 import '../providers/recipe_provider.dart';
 import '../providers/settings_provider.dart';
+import '../utils/ui_labels.dart';
 import '../utils/unit_conversion.dart';
 import 'unit_dropdown_field.dart';
 
@@ -26,6 +27,11 @@ class IngredientCard extends StatefulWidget {
   /// Null hides the percentage badge.
   final double? referenceQuantity;
 
+  /// Autofocuses the name field on this card's first build — used for a
+  /// just-added blank ingredient so the user lands straight in it (also
+  /// scrolls it into view, since it sits in a scrollable list).
+  final bool autofocus;
+
   const IngredientCard({
     required Key key,
     required this.recipeId,
@@ -34,6 +40,7 @@ class IngredientCard extends StatefulWidget {
     this.costVisible = true,
     this.extraFieldLabel = '',
     this.referenceQuantity,
+    this.autofocus = false,
   }) : super(key: key);
 
   @override
@@ -41,6 +48,11 @@ class IngredientCard extends StatefulWidget {
 }
 
 class _IngredientCardState extends State<IngredientCard> {
+  /// Overrides the auto-collapse-when-unchecked behavior so an excluded
+  /// ingredient can still be edited — tapping the collapsed row sets this,
+  /// and it stays expanded until tapped closed again.
+  bool _manuallyExpanded = false;
+
   late final TextEditingController _nameController;
   late final TextEditingController _quantityController;
   late final TextEditingController _costController;
@@ -94,18 +106,19 @@ class _IngredientCardState extends State<IngredientCard> {
           final converted = UnitConversion.convert(
               ingredient.quantity, ingredient.unit, targetUnit);
           return AlertDialog(
-            title: const Text('Convert Unit'),
+            title: const Text(IngredientCardLabels.convertDialogTitle),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                    '${_formatForEditing(ingredient.quantity)} ${ingredient.unit} equals:'),
+                    '${_formatForEditing(ingredient.quantity)} ${ingredient.unit}${IngredientCardLabels.equalsSuffix}'),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
                   initialValue: targetUnit,
                   isExpanded: true,
-                  decoration: const InputDecoration(labelText: 'Convert to'),
+                  decoration: const InputDecoration(
+                      labelText: IngredientCardLabels.convertToLabel),
                   items: [
                     for (final unit in options)
                       DropdownMenuItem(value: unit, child: Text(unit)),
@@ -131,11 +144,11 @@ class _IngredientCardState extends State<IngredientCard> {
             actions: [
               TextButton(
                 onPressed: () => Navigator.of(dialogContext).pop(),
-                child: const Text('Cancel'),
+                child: const Text(CommonLabels.cancel),
               ),
               FilledButton(
                 onPressed: () => Navigator.of(dialogContext).pop(targetUnit),
-                child: const Text('Apply'),
+                child: const Text(IngredientCardLabels.applyButton),
               ),
             ],
           );
@@ -169,14 +182,67 @@ class _IngredientCardState extends State<IngredientCard> {
         : null;
     final canConvertUnit =
         UnitConversion.compatibleUnits(ingredient.unit).isNotEmpty;
+    // Collapsed to just a name row when excluded from calculation — an
+    // "unchecked" ingredient is usually something set aside (packaging,
+    // "to taste", etc.) and doesn't need its full form taking up space.
+    // Manually re-expanding (to fix a typo, say) overrides this until
+    // toggled closed again.
+    final isCollapsed = !ingredient.includeInCalculation && !_manuallyExpanded;
+    // A flat, receded background marks an excluded ingredient regardless
+    // of whether it's collapsed or manually re-expanded for editing.
+    // Note: Card's own unset-color default *is* surfaceContainerLow (see
+    // Flutter's M3 CardTheme defaults), so that shade is indistinguishable
+    // from a normal checked card — colorScheme.surface (the Scaffold's own
+    // background) is what actually reads as visually different here.
+    final cardColor = ingredient.includeInCalculation
+        ? null
+        : theme.colorScheme.surface;
+
+    if (isCollapsed) {
+      return Card(
+        color: cardColor,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(4, 4, 8, 4),
+          child: Row(
+            children: [
+              Checkbox(
+                value: ingredient.includeInCalculation,
+                onChanged: (checked) => provider.updateIngredientIncluded(
+                    widget.recipeId, ingredient.id, checked ?? false),
+              ),
+              Expanded(
+                child: InkWell(
+                  onTap: () => setState(() => _manuallyExpanded = true),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    child: Text(
+                      ingredient.displayName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodyLarge,
+                    ),
+                  ),
+                ),
+              ),
+              IconButton(
+                tooltip: IngredientCardLabels.deleteTooltip,
+                icon: const Icon(Icons.delete_outline),
+                onPressed: widget.onDelete,
+              ),
+            ],
+          ),
+        ),
+      );
+    }
 
     return Card(
+      color: cardColor,
       child: Padding(
         padding: const EdgeInsets.fromLTRB(12, 10, 12, 14),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header row: checkbox, % badge, delete button
+            // Header row: checkbox, % badge, collapse toggle, delete button
             Row(
               children: [
                 Checkbox(
@@ -189,7 +255,7 @@ class _IngredientCardState extends State<IngredientCard> {
                 if (percentage != null) ...[
                   const SizedBox(width: 6),
                   Tooltip(
-                    message: 'Share of the "Calculate for" reference',
+                    message: IngredientCardLabels.percentageTooltip,
                     child: Chip(
                       label: Text('${percentage.toStringAsFixed(1)}%'),
                       labelStyle: theme.textTheme.labelMedium?.copyWith(
@@ -204,8 +270,15 @@ class _IngredientCardState extends State<IngredientCard> {
                   ),
                 ],
                 const Spacer(),
+                if (!ingredient.includeInCalculation)
+                  IconButton(
+                    tooltip: IngredientCardLabels.collapseTooltip,
+                    icon: const Icon(Icons.unfold_less),
+                    onPressed: () =>
+                        setState(() => _manuallyExpanded = false),
+                  ),
                 IconButton.outlined(
-                  tooltip: 'Delete ingredient',
+                  tooltip: IngredientCardLabels.deleteTooltip,
                   icon: const Icon(Icons.delete_outline),
                   onPressed: widget.onDelete,
                 ),
@@ -215,10 +288,11 @@ class _IngredientCardState extends State<IngredientCard> {
             // Name
             TextFormField(
               controller: _nameController,
+              autofocus: widget.autofocus,
               textCapitalization: TextCapitalization.sentences,
               decoration: const InputDecoration(
-                labelText: 'Ingredient name',
-                hintText: 'e.g. Onions, Garlic, Soy sauce',
+                labelText: IngredientCardLabels.nameLabel,
+                hintText: IngredientCardLabels.nameHint,
               ),
               onChanged: (value) => provider.updateIngredientName(
                   widget.recipeId, ingredient.id, value),
@@ -247,7 +321,8 @@ class _IngredientCardState extends State<IngredientCard> {
                       FilteringTextInputFormatter.allow(
                           RegExp(r'^\d*\.?\d*')),
                     ],
-                    decoration: const InputDecoration(labelText: 'Quantity'),
+                    decoration: const InputDecoration(
+                        labelText: IngredientCardLabels.quantityLabel),
                     onChanged: (value) {
                       final parsed = double.tryParse(value) ?? 0;
                       provider.updateIngredientQuantity(
@@ -268,7 +343,7 @@ class _IngredientCardState extends State<IngredientCard> {
                 ),
                 if (canConvertUnit)
                   IconButton(
-                    tooltip: 'Convert to another unit',
+                    tooltip: IngredientCardLabels.convertUnitTooltip,
                     icon: const Icon(Icons.swap_horiz),
                     onPressed: () => _showConvertDialog(context),
                   ),
@@ -285,8 +360,8 @@ class _IngredientCardState extends State<IngredientCard> {
                   FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*')),
                 ],
                 decoration: InputDecoration(
-                  labelText: 'Cost (optional)',
-                  hintText: 'e.g. 2.50',
+                  labelText: IngredientCardLabels.costLabel,
+                  hintText: IngredientCardLabels.costHint,
                   prefixText: '$currencySymbol ',
                 ),
                 onChanged: (value) {
@@ -298,39 +373,45 @@ class _IngredientCardState extends State<IngredientCard> {
                 },
               ),
             ],
-            const SizedBox(height: 10),
-            // Results
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              decoration: BoxDecoration(
-                color: theme.colorScheme.surfaceContainerHighest,
-                borderRadius: BorderRadius.circular(10),
+            // Results — hidden until Calculate has actually been run at
+            // least once (ingredient.newQuantity is null on a fresh
+            // recipe), so a card with nothing calculated yet doesn't show
+            // a box full of "—" placeholders.
+            if (ingredient.newQuantity != null) ...[
+              const SizedBox(height: 10),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: hasCost
+                    ? Row(
+                        children: [
+                          Expanded(
+                            child: _ResultStat(
+                              label: IngredientCardLabels.newQuantityStat,
+                              value:
+                                  '${_formatDisplay(ingredient.newQuantity)} ${ingredient.unit}',
+                            ),
+                          ),
+                          Expanded(
+                            child: _ResultStat(
+                              label: IngredientCardLabels.newCostStat,
+                              value: _formatDisplay(ingredient.newCost,
+                                  prefix: currencySymbol),
+                            ),
+                          ),
+                        ],
+                      )
+                    : _ResultStat(
+                        label: IngredientCardLabels.newQuantityStat,
+                        value:
+                            '${_formatDisplay(ingredient.newQuantity)} ${ingredient.unit}',
+                      ),
               ),
-              child: hasCost
-                  ? Row(
-                      children: [
-                        Expanded(
-                          child: _ResultStat(
-                            label: 'New quantity',
-                            value:
-                                '${_formatDisplay(ingredient.newQuantity)}${ingredient.newQuantity != null ? ' ${ingredient.unit}' : ''}',
-                          ),
-                        ),
-                        Expanded(
-                          child: _ResultStat(
-                            label: 'New est. cost',
-                            value: _formatDisplay(ingredient.newCost,
-                                prefix: currencySymbol),
-                          ),
-                        ),
-                      ],
-                    )
-                  : _ResultStat(
-                      label: 'New quantity',
-                      value:
-                          '${_formatDisplay(ingredient.newQuantity)}${ingredient.newQuantity != null ? ' ${ingredient.unit}' : ''}',
-                    ),
-            ),
+            ],
           ],
         ),
       ),
